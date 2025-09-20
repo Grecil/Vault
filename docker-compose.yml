@@ -29,6 +29,29 @@ services:
       - minio_data:/data
     command: server /data --console-address ":9001"
 
+  backend:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - redis
+      - minio
+
+ frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:8080
+      - VITE_GRAPHQL_ENDPOINT=http://localhost:8080/graphql
+
 volumes:
   postgres_data:
   minio_data:
