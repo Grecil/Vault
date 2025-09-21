@@ -33,7 +33,6 @@
         "MINIO_SECRET_KEY": "${{minio.MINIO_ROOT_PASSWORD}}",
         "MINIO_BUCKET": "filevault-files",
         "MINIO_USE_SSL": "false",
-        "REDIS_URL": "${{redis.REDIS_URL}}"
       }
     },
     "minio": {
@@ -49,9 +48,6 @@
           "name": "minio-data"
         }
       ]
-    },
-    "redis": {
-      "image": "redis:7-alpine"
     }
   },
   "volumes": [

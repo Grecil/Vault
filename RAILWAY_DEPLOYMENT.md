@@ -13,8 +13,7 @@ Railway Services:
 ├── Frontend (React + Nginx)
 ├── Backend (Go API)  
 ├── PostgreSQL (Database)
-├── MinIO (File Storage)
-└── Redis (Caching)
+└── MinIO (File Storage)
 ```
 
 ## Step 1: Prepare Your Repository
@@ -95,10 +94,6 @@ Railway Services:
    railway up --service minio --image minio/minio:latest
    ```
 
-   **Redis:**
-   ```bash
-   railway add redis
-   ```
 
 ### Option B: Using Railway Dashboard
 
@@ -108,7 +103,6 @@ Railway Services:
    - Backend (set root directory to `/Backend`)
    - Frontend (set root directory to `/Frontend`)
    - PostgreSQL (from template)
-   - Redis (from template)
    - MinIO (from Docker image)
 
 ## Step 3: Configure Environment Variables
@@ -132,8 +126,6 @@ MINIO_SECRET_KEY=${minio.MINIO_ROOT_PASSWORD}
 MINIO_BUCKET=filevault-files
 MINIO_USE_SSL=false
 
-# Redis
-REDIS_URL=${Redis.REDIS_URL}
 ```
 
 ### Frontend Service Variables:
@@ -168,7 +160,7 @@ MINIO_ROOT_PASSWORD=your_secure_password_here
    - Enable public networking for presigned URLs
    - Note the domain (e.g., `your-minio.up.railway.app`)
 
-4. **PostgreSQL & Redis**:
+4. **PostgreSQL**:
    - Keep private networking only
 
 ## Step 5: Update Frontend Configuration
@@ -306,8 +298,5 @@ railway scale --service backend --replicas 2
 **Monthly Costs (approximate):**
 - Railway Pro Plan: $5/month
 - PostgreSQL: $5/month
-- Redis: $5/month
 - MinIO: $5/month (depending on storage)
-- **Total: ~$20/month**
-
-*Note: Actual costs depend on usage and resource requirements*
+- **Total: ~$15/month**
