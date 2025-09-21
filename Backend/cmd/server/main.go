@@ -28,6 +28,9 @@ func main() {
 
 	gin.SetMode(cfg.GinMode)
 
+	// Initialize Clerk SDK
+	middleware.InitializeClerk(cfg)
+
 	db, err := database.Connect(cfg)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)

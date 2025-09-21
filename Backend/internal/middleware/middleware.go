@@ -11,16 +11,23 @@ import (
 	"filevault-backend/internal/models"
 	"filevault-backend/internal/services"
 
+	"github.com/clerk/clerk-sdk-go/v2"
+	"github.com/clerk/clerk-sdk-go/v2/jwks"
+	"github.com/clerk/clerk-sdk-go/v2/jwt"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 )
 
-type ClerkClaims struct {
-	Sub       string `json:"sub"`   // User ID
-	Email     string `json:"email"` // User email
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	jwt.RegisteredClaims
+// ClerkJWKSClient stores the JWKS client for token verification
+var ClerkJWKSClient *jwks.Client
+
+// InitializeClerk sets up the Clerk SDK with the secret key
+func InitializeClerk(cfg *config.Config) {
+	clerk.SetKey(cfg.ClerkSecretKey)
+
+	// Initialize JWKS client for manual verification
+	config := &clerk.ClientConfig{}
+	config.Key = clerk.String(cfg.ClerkSecretKey)
+	ClerkJWKSClient = jwks.NewClient(config)
 }
 
 type AuthenticatedUser struct {
@@ -50,49 +57,56 @@ func CORS() gin.HandlerFunc {
 	})
 }
 
-// RequireAuth middleware validates Clerk JWT tokens
+// RequireAuth middleware validates Clerk JWT tokens using proper verification
 func RequireAuth(cfg *config.Config) gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+		// Get the session token from Authorization header or __session cookie
+		sessionToken := getSessionToken(c.Request)
+		if sessionToken == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization token required"})
 			c.Abort()
 			return
 		}
 
-		// Extract token from "Bearer <token>"
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		if tokenString == authHeader {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
-			c.Abort()
-			return
-		}
-
-		// Parse and validate JWT token
-		claims := &ClerkClaims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			// Verify signing method
-			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-			}
-
-			// For now, we'll use a simple validation
-			// In production, you'd fetch Clerk's public keys from their JWKS endpoint
-			return []byte(cfg.ClerkSecretKey), nil
+		// Decode the session JWT to find the key ID
+		unsafeClaims, err := jwt.Decode(c.Request.Context(), &jwt.DecodeParams{
+			Token: sessionToken,
 		})
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token format"})
+			c.Abort()
+			return
+		}
 
-		if err != nil || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		// Fetch the JSON Web Key
+		jwk, err := jwt.GetJSONWebKey(c.Request.Context(), &jwt.GetJSONWebKeyParams{
+			KeyID:      unsafeClaims.KeyID,
+			JWKSClient: ClerkJWKSClient,
+		})
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Failed to verify token"})
+			c.Abort()
+			return
+		}
+
+		// Verify the session
+		claims, err := jwt.Verify(c.Request.Context(), &jwt.VerifyParams{
+			Token: sessionToken,
+			JWK:   jwk,
+		})
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token verification failed"})
 			c.Abort()
 			return
 		}
 
 		// Create authenticated user context
+		// Note: We'll get user details from the database or user API if needed
 		user := &AuthenticatedUser{
-			ID:        claims.Sub,
-			Email:     claims.Email,
-			FirstName: claims.FirstName,
-			LastName:  claims.LastName,
+			ID:        claims.Subject,
+			Email:     "", // We'll fetch this from Clerk User API if needed
+			FirstName: "",
+			LastName:  "",
 			Role:      models.UserRoleUser, // Default role, will be updated from DB
 		}
 
@@ -124,40 +138,68 @@ func RequireAdmin() gin.HandlerFunc {
 // OptionalAuth middleware validates auth if present but doesn't require it
 func OptionalAuth(cfg *config.Config) gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
+		// Get the session token from Authorization header or __session cookie
+		sessionToken := getSessionToken(c.Request)
+		if sessionToken == "" {
 			c.Next()
 			return
 		}
 
-		// Use the same logic as RequireAuth but don't abort on failure
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		if tokenString == authHeader {
-			c.Next()
-			return
-		}
-
-		claims := &ClerkClaims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-			}
-			return []byte(cfg.ClerkSecretKey), nil
+		// Try to verify token, but don't abort on failure
+		unsafeClaims, err := jwt.Decode(c.Request.Context(), &jwt.DecodeParams{
+			Token: sessionToken,
 		})
-
-		if err == nil && token.Valid {
-			user := &AuthenticatedUser{
-				ID:        claims.Sub,
-				Email:     claims.Email,
-				FirstName: claims.FirstName,
-				LastName:  claims.LastName,
-				Role:      models.UserRoleUser,
-			}
-			c.Set(UserContextKey, user)
+		if err != nil {
+			c.Next()
+			return
 		}
+
+		jwk, err := jwt.GetJSONWebKey(c.Request.Context(), &jwt.GetJSONWebKeyParams{
+			KeyID:      unsafeClaims.KeyID,
+			JWKSClient: ClerkJWKSClient,
+		})
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		claims, err := jwt.Verify(c.Request.Context(), &jwt.VerifyParams{
+			Token: sessionToken,
+			JWK:   jwk,
+		})
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		user := &AuthenticatedUser{
+			ID:        claims.Subject,
+			Email:     "", // We'll fetch this from Clerk User API if needed
+			FirstName: "",
+			LastName:  "",
+			Role:      models.UserRoleUser,
+		}
+		c.Set(UserContextKey, user)
 
 		c.Next()
 	})
+}
+
+// getSessionToken retrieves the session token from either the Authorization header
+// or the __session cookie, depending on the request type
+func getSessionToken(r *http.Request) string {
+	// First try to get the token from the Authorization header (cross-origin)
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "" {
+		return strings.TrimPrefix(authHeader, "Bearer ")
+	}
+
+	// If not found in header, try to get from __session cookie (same-origin)
+	cookie, err := r.Cookie("__session")
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
 }
 
 // GetUserFromContext extracts the authenticated user from gin context
