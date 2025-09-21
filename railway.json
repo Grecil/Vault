@@ -1,0 +1,62 @@
+{
+  "name": "FileVault",
+  "services": {
+    "frontend": {
+      "source": {
+        "repo": "your-username/filevault",
+        "rootDirectory": "/Frontend"
+      },
+      "build": {
+        "dockerfile": "Dockerfile"
+      },
+      "variables": {
+        "VITE_API_URL": "${{backend.RAILWAY_PUBLIC_DOMAIN}}",
+        "VITE_MINIO_URL": "${{minio.RAILWAY_PUBLIC_DOMAIN}}",
+        "VITE_CLERK_PUBLISHABLE_KEY": "pk_live_xxx"
+      }
+    },
+    "backend": {
+      "source": {
+        "repo": "your-username/filevault", 
+        "rootDirectory": "/Backend"
+      },
+      "build": {
+        "dockerfile": "Dockerfile"
+      },
+      "variables": {
+        "DATABASE_URL": "${{Postgres.DATABASE_URL}}",
+        "PORT": "8080",
+        "GIN_MODE": "release",
+        "CLERK_SECRET_KEY": "sk_live_xxx",
+        "MINIO_ENDPOINT": "${{minio.RAILWAY_PRIVATE_DOMAIN}}:9000",
+        "MINIO_ACCESS_KEY": "${{minio.MINIO_ROOT_USER}}",
+        "MINIO_SECRET_KEY": "${{minio.MINIO_ROOT_PASSWORD}}",
+        "MINIO_BUCKET": "filevault-files",
+        "MINIO_USE_SSL": "false",
+        "REDIS_URL": "${{redis.REDIS_URL}}"
+      }
+    },
+    "minio": {
+      "image": "minio/minio:latest",
+      "command": "server /data --console-address ':9001'",
+      "variables": {
+        "MINIO_ROOT_USER": "minioadmin",
+        "MINIO_ROOT_PASSWORD": "minioadmin123change"
+      },
+      "volumes": [
+        {
+          "mountPath": "/data",
+          "name": "minio-data"
+        }
+      ]
+    },
+    "redis": {
+      "image": "redis:7-alpine"
+    }
+  },
+  "volumes": [
+    {
+      "name": "minio-data"
+    }
+  ]
+}

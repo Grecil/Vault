@@ -1,5 +1,5 @@
 import React from 'react'
-import { UploadingFile } from '../hooks/useFileUpload'
+import type { UploadingFile } from '../hooks/useFileUpload'
 
 interface UploadProgressProps {
   uploadingFiles: UploadingFile[]
