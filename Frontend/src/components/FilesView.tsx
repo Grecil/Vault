@@ -1,11 +1,10 @@
 import React from 'react'
 import { useDropzone } from 'react-dropzone'
-import { formatFileSize } from '../utils/crypto'
 import { UploadIcon, GridIcon, ListIcon } from './FileTypeIcons'
-import FileGrid, { FileItem } from './FileGrid'
+import FileGrid, { type FileItem } from './FileGrid'
 import FileList from './FileList'
 import UploadProgress from './UploadProgress'
-import { UploadingFile } from '../hooks/useFileUpload'
+import { type UploadingFile } from '../hooks/useFileUpload'
 
 interface FilesViewProps {
   files: FileItem[]
@@ -21,6 +20,11 @@ interface FilesViewProps {
   maxFileSize: number
   maxFiles: number
   disabled?: boolean
+  loading?: boolean
+  error?: string | null
+  onFileDelete?: (fileId: string) => Promise<void>
+  onFileToggleVisibility?: (fileId: string) => Promise<void>
+  onFileDownload?: (fileId: string) => Promise<void>
 }
 
 const FilesView: React.FC<FilesViewProps> = ({
@@ -36,7 +40,12 @@ const FilesView: React.FC<FilesViewProps> = ({
   isDragReject,
   maxFileSize,
   maxFiles,
-  disabled = false
+  disabled = false,
+  loading = false,
+  error = null,
+  onFileDelete,
+  onFileToggleVisibility,
+  onFileDownload
 }) => {
   const { getRootProps, getInputProps } = useDropzone({
     onDrop,
@@ -62,13 +71,34 @@ const FilesView: React.FC<FilesViewProps> = ({
   }
 
   const handleFileClick = (file: FileItem) => {
-    console.log('File clicked:', file)
-    // TODO: Handle file click (preview, download, etc.)
+    if (onFileDownload) {
+      onFileDownload(file.id)
+    }
   }
 
   const handleMoreClick = (file: FileItem) => {
     console.log('More clicked for file:', file)
     // TODO: Show context menu or file actions
+  }
+
+  const handleFileDelete = async (file: FileItem) => {
+    if (onFileDelete && confirm(`Are you sure you want to delete "${file.name}"?`)) {
+      try {
+        await onFileDelete(file.id)
+      } catch (error) {
+        console.error('Error deleting file:', error)
+      }
+    }
+  }
+
+  const handleToggleVisibility = async (file: FileItem) => {
+    if (onFileToggleVisibility) {
+      try {
+        await onFileToggleVisibility(file.id)
+      } catch (error) {
+        console.error('Error toggling file visibility:', error)
+      }
+    }
   }
 
   return (
@@ -119,6 +149,13 @@ const FilesView: React.FC<FilesViewProps> = ({
           </div>
         </div>
 
+        {/* Error Display */}
+        {error && (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+            <p className="text-destructive font-medium">Error: {error}</p>
+          </div>
+        )}
+
         {/* Upload Progress */}
         <UploadProgress 
           uploadingFiles={uploadingFiles}
@@ -127,15 +164,32 @@ const FilesView: React.FC<FilesViewProps> = ({
           onClearAll={onClearAll}
         />
 
+        {/* Loading State */}
+        {loading && !files.length && (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading files...</p>
+          </div>
+        )}
+
         {/* Files Display */}
-        {viewMode === 'grid' ? (
-          <FileGrid files={files} onFileClick={handleFileClick} />
-        ) : (
-          <FileList 
-            files={files} 
-            onFileClick={handleFileClick}
-            onMoreClick={handleMoreClick}
-          />
+        {!loading && (
+          viewMode === 'grid' ? (
+            <FileGrid 
+              files={files} 
+              onFileClick={handleFileClick}
+              onFileDelete={handleFileDelete}
+              onToggleVisibility={handleToggleVisibility}
+            />
+          ) : (
+            <FileList 
+              files={files} 
+              onFileClick={handleFileClick}
+              onMoreClick={handleMoreClick}
+              onFileDelete={handleFileDelete}
+              onToggleVisibility={handleToggleVisibility}
+            />
+          )
         )}
 
         {/* Empty State */}

@@ -1,14 +1,16 @@
 import React from 'react'
 import { getFileIcon, MoreIcon } from './FileTypeIcons'
-import { FileItem } from './FileGrid'
+import { type FileItem } from './FileGrid'
 
 interface FileListProps {
   files: FileItem[]
   onFileClick?: (file: FileItem) => void
   onMoreClick?: (file: FileItem) => void
+  onFileDelete?: (file: FileItem) => void
+  onToggleVisibility?: (file: FileItem) => void
 }
 
-const FileList: React.FC<FileListProps> = ({ files, onFileClick, onMoreClick }) => {
+const FileList: React.FC<FileListProps> = ({ files, onFileClick, onMoreClick, onFileDelete, onToggleVisibility }) => {
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden">
       <div className="overflow-x-auto">
@@ -33,7 +35,13 @@ const FileList: React.FC<FileListProps> = ({ files, onFileClick, onMoreClick }) 
                 <td className="py-3 px-4">
                   <div className="flex items-center space-x-3">
                     {getFileIcon(file.type)}
-                    <span className="text-foreground font-medium">{file.name}</span>
+                    <span 
+                      className="text-foreground font-medium max-w-xs break-words line-clamp-2" 
+                      title={file.name}
+                      style={{ wordBreak: 'break-word', hyphens: 'auto' }}
+                    >
+                      {file.name}
+                    </span>
                   </div>
                 </td>
                 <td className="py-3 px-4 text-muted-foreground">{file.size}</td>
@@ -51,15 +59,52 @@ const FileList: React.FC<FileListProps> = ({ files, onFileClick, onMoreClick }) 
                 </td>
                 <td className="py-3 px-4 text-muted-foreground">{file.uploadDate}</td>
                 <td className="py-3 px-4">
-                  <button 
-                    className="text-muted-foreground hover:text-foreground p-1 rounded"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onMoreClick?.(file)
-                    }}
-                  >
-                    <MoreIcon />
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    {onToggleVisibility && (
+                      <button 
+                        className="text-foreground hover:text-foreground hover:bg-accent p-1 rounded transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onToggleVisibility(file)
+                        }}
+                        title={file.isPublic ? "Make private" : "Make public"}
+                      >
+                         {file.isPublic ? (
+                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                           </svg>
+                         ) : (
+                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                           </svg>
+                         )}
+                      </button>
+                    )}
+                    {onFileDelete && (
+                      <button 
+                        className="text-destructive hover:text-destructive-foreground hover:bg-destructive p-1 rounded transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onFileDelete(file)
+                        }}
+                        title="Delete file"
+                      >
+                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                         </svg>
+                      </button>
+                    )}
+                    <button 
+                      className="text-foreground hover:text-foreground hover:bg-accent p-1 rounded transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onMoreClick?.(file)
+                      }}
+                    >
+                      <MoreIcon />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

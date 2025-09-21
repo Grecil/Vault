@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { useUser } from '@clerk/clerk-react'
+import { useAuth } from '@clerk/clerk-react'
 import { calculateSHA256, formatFileSize } from '../utils/crypto'
 import { apiClient } from '../lib/api'
 
@@ -16,7 +16,7 @@ export interface UploadingFile {
 
 export const useFileUpload = (maxFileSize: number = 10 * 1024 * 1024) => {
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([])
-  const { getToken } = useUser()
+  const { getToken } = useAuth()
 
   const updateFileStatus = useCallback((fileId: string, updates: Partial<UploadingFile>) => {
     setUploadingFiles(prev => 
@@ -112,7 +112,13 @@ export const useFileUpload = (maxFileSize: number = 10 * 1024 * 1024) => {
       })
 
       // Complete upload
-      const completeData = await apiClient.completeUpload(getToken, uploadId, sha256)
+      const completeData = await apiClient.completeUpload(
+        getToken, 
+        uploadId, 
+        file.name, 
+        file.type || 'application/octet-stream', 
+        sha256
+      )
 
       if (completeData.success) {
         updateFileStatus(fileId, { 

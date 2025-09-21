@@ -1,15 +1,22 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { formatFileSize } from '../utils/crypto'
 import { useDarkMode } from '../hooks/useDarkMode'
 import { useFileUpload } from '../hooks/useFileUpload'
+import { useFiles } from '../hooks/useFiles'
+import { useUser } from '@clerk/clerk-react'
+import { useToast } from '../hooks/useToast'
 import DashboardSidebar, { type SidebarItem } from './DashboardSidebar'
 import FilesView from './FilesView'
+import { ToastContainer } from './Toast'
 import { SearchIcon, SunIcon, MoonIcon } from './FileTypeIcons'
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('files')
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    const savedViewMode = localStorage.getItem('fileViewMode')
+    return (savedViewMode as 'grid' | 'list') || 'grid'
+  })
   
   const { isDarkMode, toggleDarkMode } = useDarkMode()
   const { 
@@ -19,8 +26,27 @@ const Dashboard = () => {
     clearCompleted, 
     clearAll 
   } = useFileUpload()
+  
+  const {
+    files,
+    loading,
+    error: filesError,
+    refreshFiles,
+    deleteFile,
+    toggleFileVisibility,
+    downloadFile,
+    totalCount
+  } = useFiles()
+  
+  const { user } = useUser()
+  const { toasts, removeToast, success, error: showError } = useToast()
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
+  const handleViewModeChange = (mode: 'grid' | 'list') => {
+    setViewMode(mode)
+    localStorage.setItem('fileViewMode', mode)
+  }
 
   const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
     // Handle rejected files
@@ -89,24 +115,82 @@ const Dashboard = () => {
     }
   ]
 
-  // Mock file data for now
-  const mockFiles = [
-    { id: 1, name: 'Project Proposal.pdf', size: '2.5 MB', type: 'pdf', uploadDate: '2024-01-15', isPublic: false },
-    { id: 2, name: 'vacation-photo.jpg', size: '5.2 MB', type: 'image', uploadDate: '2024-01-14', isPublic: true },
-    { id: 3, name: 'budget-2024.xlsx', size: '890 KB', type: 'spreadsheet', uploadDate: '2024-01-13', isPublic: false },
-    { id: 4, name: 'meeting-notes.txt', size: '45 KB', type: 'text', uploadDate: '2024-01-12', isPublic: false },
-    { id: 5, name: 'presentation.pptx', size: '12.3 MB', type: 'presentation', uploadDate: '2024-01-11', isPublic: true },
-    { id: 6, name: 'invoice-jan-2024.pdf', size: '234 KB', type: 'pdf', uploadDate: '2024-01-10', isPublic: false }
-  ]
+  // Refresh files when upload completes and show notifications
+  useEffect(() => {
+    const completedUploads = uploadingFiles.filter(f => f.status === 'completed')
+    const failedUploads = uploadingFiles.filter(f => f.status === 'failed')
+    const duplicateUploads = uploadingFiles.filter(f => f.status === 'duplicate')
+    
+    if (completedUploads.length > 0) {
+      refreshFiles()
+      completedUploads.forEach(upload => {
+        success('File uploaded successfully', `${upload.file.name} has been uploaded`)
+      })
+    }
+    
+    if (failedUploads.length > 0) {
+      failedUploads.forEach(upload => {
+        showError('Upload failed', `Failed to upload ${upload.file.name}: ${upload.error}`)
+      })
+    }
+    
+    if (duplicateUploads.length > 0) {
+      duplicateUploads.forEach(upload => {
+        success('File already exists', `${upload.file.name} was already in your vault`)
+      })
+    }
+  }, [uploadingFiles, refreshFiles, success, showError])
+
+  const getFileTypeFromMime = (mimeType: string): string => {
+    if (mimeType.startsWith('image/')) return 'image'
+    if (mimeType.startsWith('video/')) return 'video'
+    if (mimeType.startsWith('audio/')) return 'audio'
+    if (mimeType === 'application/pdf') return 'pdf'
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return 'spreadsheet'
+    if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return 'presentation'
+    if (mimeType.startsWith('text/')) return 'text'
+    return 'document'
+  }
+
+  // Convert FileInfo to FileItem format expected by components
+  const fileItems = (() => {
+    try {
+      return (files || []).map(file => ({
+        id: file?.id || '',
+        name: file?.name || 'Unknown File',
+        size: (() => {
+          try {
+            return formatFileSize(file?.size || 0)
+          } catch (e) {
+            return '0 Bytes'
+          }
+        })(),
+        type: getFileTypeFromMime(file?.contentType || 'application/octet-stream'),
+        uploadDate: (() => {
+          try {
+            if (!file?.uploadDate) return 'Unknown'
+            const date = new Date(file.uploadDate)
+            return isNaN(date.getTime()) ? 'Unknown' : date.toLocaleDateString()
+          } catch (e) {
+            return 'Unknown'
+          }
+        })(),
+        isPublic: file?.isPublic || false
+      }))
+    } catch (error) {
+      console.error('Error processing files:', error)
+      return []
+    }
+  })()
 
   const renderMainContent = () => {
     switch (activeTab) {
       case 'files':
         return (
           <FilesView
-            files={mockFiles}
+            files={fileItems}
             viewMode={viewMode}
-            onViewModeChange={setViewMode}
+            onViewModeChange={handleViewModeChange}
             uploadingFiles={uploadingFiles}
             onDrop={onDrop}
             onRemoveUploadingFile={removeFile}
@@ -117,6 +201,31 @@ const Dashboard = () => {
             maxFileSize={MAX_FILE_SIZE}
             maxFiles={10}
             disabled={activeTab !== 'files' || uploadingFiles.length >= 10}
+            loading={loading}
+            error={filesError}
+            onFileDelete={async (fileId: string) => {
+              try {
+                await deleteFile(fileId)
+                success('File deleted', 'File has been permanently deleted')
+              } catch (err: any) {
+                showError('Delete failed', err.message || 'Failed to delete file')
+              }
+            }}
+            onFileToggleVisibility={async (fileId: string) => {
+              try {
+                await toggleFileVisibility(fileId)
+                success('Visibility updated', 'File visibility has been changed')
+              } catch (err: any) {
+                showError('Update failed', err.message || 'Failed to update file visibility')
+              }
+            }}
+            onFileDownload={async (fileId: string) => {
+              try {
+                await downloadFile(fileId)
+              } catch (err: any) {
+                showError('Download failed', err.message || 'Failed to download file')
+              }
+            }}
           />
         )
       case 'shared':
@@ -131,7 +240,7 @@ const Dashboard = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
               </svg>
               <p className="text-foreground font-medium mb-2">Shared files view</p>
-              <p className="text-muted-foreground">Shows {mockFiles.filter(f => f.isPublic).length} public files</p>
+              <p className="text-muted-foreground">Shows {fileItems?.filter(f => f?.isPublic)?.length || 0} public files</p>
             </div>
           </div>
         )
@@ -158,13 +267,15 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      <div className="flex h-screen bg-background">
       {/* Sidebar */}
       <DashboardSidebar
         sidebarItems={sidebarItems}
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        fileCount={mockFiles.length}
+        fileCount={totalCount}
       />
 
       {/* Main Content */}
@@ -174,6 +285,11 @@ const Dashboard = () => {
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
               <h2 className="text-lg font-semibold text-foreground">Dashboard</h2>
+              {user && (
+                <span className="text-sm text-muted-foreground">
+                  Welcome, {user.firstName || user.emailAddresses?.[0]?.emailAddress || 'User'}
+                </span>
+              )}
             </div>
             <div className="flex items-center space-x-4">
               {/* Search */}
@@ -204,6 +320,7 @@ const Dashboard = () => {
         </main>
       </div>
     </div>
+    </>
   )
 }
 
