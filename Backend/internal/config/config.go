@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -29,8 +30,14 @@ type Config struct {
 	MinIOBucket    string
 	MinIOUseSSL    bool
 
-	// Redis Configuration
-	RedisURL string
+	// Storage Configuration
+	DefaultStorageQuotaMB int64 // Default storage quota in MB
+	MaxStorageQuotaMB     int64 // Maximum storage quota in MB (for admins)
+
+	// Rate Limiting Configuration
+	RateLimitEnabled   bool    // Enable/disable rate limiting
+	RateLimitPerSecond float64 // Requests per second
+	RateLimitBurstSize int     // Burst capacity
 }
 
 func Load() (*Config, error) {
@@ -53,7 +60,14 @@ func Load() (*Config, error) {
 		MinIOBucket:    getEnv("MINIO_BUCKET", "filevault-files"),
 		MinIOUseSSL:    getEnv("MINIO_USE_SSL", "false") == "true",
 
-		RedisURL: getEnv("REDIS_URL", "redis://localhost:6379"),
+		// Storage Configuration
+		DefaultStorageQuotaMB: parseInt64(getEnv("DEFAULT_STORAGE_QUOTA_MB", "100")),
+		MaxStorageQuotaMB:     parseInt64(getEnv("MAX_STORAGE_QUOTA_MB", "10240")), // 10GB max
+
+		// Rate Limiting Configuration
+		RateLimitEnabled:   getEnv("RATE_LIMIT_ENABLED", "true") == "true",
+		RateLimitPerSecond: parseFloat64(getEnv("RATE_LIMIT_PER_SECOND", "2.0")),
+		RateLimitBurstSize: parseInt(getEnv("RATE_LIMIT_BURST_SIZE", "5")),
 	}
 
 	// Handle Railway DATABASE_URL
@@ -108,4 +122,25 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func parseInt(value string) int {
+	if i, err := strconv.Atoi(value); err == nil {
+		return i
+	}
+	return 0
+}
+
+func parseInt64(value string) int64 {
+	if i, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return i
+	}
+	return 0
+}
+
+func parseFloat64(value string) float64 {
+	if f, err := strconv.ParseFloat(value, 64); err == nil {
+		return f
+	}
+	return 0.0
 }

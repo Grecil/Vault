@@ -12,6 +12,10 @@ import (
 
 	"filevault-backend/internal/config"
 	"filevault-backend/internal/database"
+	"filevault-backend/internal/handlers"
+	"filevault-backend/internal/middleware"
+	"filevault-backend/internal/services"
+	"filevault-backend/internal/storage"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,18 +38,49 @@ func main() {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
+	// Initialize storage
+	minioStorage, err := storage.NewMinIOStorage(cfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize MinIO storage: %v", err)
+	}
+
+	// Initialize rate limiting service
+	rateLimitService := services.NewRateLimitService(cfg)
+	defer rateLimitService.Close()
+
+	// Initialize services
+	userService := services.NewUserService(db.DB, cfg)
+	fileService := services.NewFileService(db.DB, minioStorage)
+
+	// Initialize handlers
+	userHandler := handlers.NewUserHandler(userService)
+	fileHandler := handlers.NewFileHandler(fileService, userService)
+	adminHandler := handlers.NewAdminHandler(userService, fileService)
+
+	// Setup router
 	router := gin.New()
-	router.Use(gin.Logger())
+	router.Use(middleware.RequestLogger())
+	router.Use(middleware.CORS())
 	router.Use(gin.Recovery())
 
+	// Health check
 	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":    "healthy",
-			"timestamp": time.Now().UTC(),
-			"database":  "connected",
-		})
+		healthStatus := gin.H{
+			"status":     "healthy",
+			"timestamp":  time.Now().UTC(),
+			"database":   "connected",
+			"storage":    "connected",
+			"rate_limit": "enabled",
+		}
+
+		if !cfg.RateLimitEnabled {
+			healthStatus["rate_limit"] = "disabled"
+		}
+
+		c.JSON(http.StatusOK, healthStatus)
 	})
 
+	// API routes
 	api := router.Group("/api/v1")
 	{
 		api.GET("/", func(c *gin.Context) {
@@ -54,6 +89,51 @@ func main() {
 				"status":  "running",
 			})
 		})
+
+		// Public routes (no auth required, but rate limited)
+		public := api.Group("/public")
+		public.Use(middleware.RateLimit(rateLimitService))
+		{
+			public.GET("/files/:id", fileHandler.GetPublicFile)
+			public.GET("/files/:id/download", fileHandler.DownloadPublicFile)
+		}
+
+		// Protected routes (auth required)
+		protected := api.Group("/")
+		protected.Use(middleware.RequireAuth(cfg))
+		protected.Use(middleware.RateLimit(rateLimitService))
+		{
+			// User routes
+			user := protected.Group("/user")
+			{
+				user.GET("/profile", userHandler.GetProfile)
+				user.GET("/storage", userHandler.GetStorageInfo)
+			}
+
+			// File routes
+			files := protected.Group("/files")
+			{
+				files.POST("/upload-url", fileHandler.GenerateUploadURL)
+				files.POST("/complete", fileHandler.CompleteUpload)
+				files.GET("", fileHandler.ListFiles)
+				files.GET("/:id/download", fileHandler.DownloadFile)
+				files.DELETE("/:id", fileHandler.DeleteFile)
+				files.PATCH("/:id/public", fileHandler.TogglePublic)
+			}
+		}
+
+		// Admin routes (admin auth required)
+		admin := api.Group("/admin")
+		admin.Use(middleware.RequireAuth(cfg))
+		admin.Use(middleware.RequireAdmin())
+		admin.Use(middleware.RateLimit(rateLimitService))
+		{
+			admin.GET("/users", adminHandler.ListUsers)
+			admin.DELETE("/users/:id", adminHandler.DeleteUser)
+			admin.PATCH("/users/:id/role", adminHandler.UpdateUserRole)
+			admin.PATCH("/users/:id/quota", adminHandler.UpdateUserQuota)
+			admin.GET("/stats", adminHandler.GetStats)
+		}
 	}
 
 	server := &http.Server{
