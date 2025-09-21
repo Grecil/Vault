@@ -139,7 +139,7 @@ func (s *FileService) GetUserFiles(userID string, offset, limit int) ([]UserFile
 	}
 
 	// Convert to response format
-	var response []UserFileResponse
+	response := make([]UserFileResponse, 0) // Initialize as empty slice, not nil
 	for _, file := range userFiles {
 		response = append(response, UserFileResponse{
 			ID:            file.ID,
@@ -189,6 +189,7 @@ func (s *FileService) GetFileDownloadURL(userID string, fileID uuid.UUID) (strin
 
 // DeleteUserFile deletes a user's file
 func (s *FileService) DeleteUserFile(userID string, fileID uuid.UUID) error {
+	fmt.Printf("UPDATED DELETION LOGIC: Starting deletion of file %s for user %s\n", fileID, userID)
 	tx := s.db.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -196,21 +197,18 @@ func (s *FileService) DeleteUserFile(userID string, fileID uuid.UUID) error {
 		}
 	}()
 
-	// Get user file
+	// Get user file without preloading FileData to avoid relation issues
 	var userFile models.UserFile
-	err := tx.Preload("FileData").Where("id = ? AND user_id = ?", fileID, userID).First(&userFile).Error
+	err := tx.Where("id = ? AND user_id = ?", fileID, userID).First(&userFile).Error
 	if err != nil {
 		tx.Rollback()
-		return fmt.Errorf("file not found: %w", err)
+		if err == gorm.ErrRecordNotFound {
+			return fmt.Errorf("file not found")
+		}
+		return fmt.Errorf("database error finding file: %w", err)
 	}
 
-	// Delete user file record
-	if err := tx.Delete(&userFile).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to delete user file: %w", err)
-	}
-
-	// Decrement reference count
+	// Get file hash record first (before deleting user file)
 	var fileHash models.FileHash
 	err = tx.Where("hash = ?", userFile.FileHash).First(&fileHash).Error
 	if err != nil {
@@ -218,27 +216,62 @@ func (s *FileService) DeleteUserFile(userID string, fileID uuid.UUID) error {
 		return fmt.Errorf("failed to get file hash record: %w", err)
 	}
 
-	newRefCount := fileHash.ReferenceCount - 1
-	if newRefCount <= 0 {
+	// Delete user file record first (hard delete to avoid foreign key issues)
+	if err := tx.Unscoped().Delete(&userFile).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to delete user file: %w", err)
+	}
+
+	// Check if there are any other user files still referencing this hash
+	// Use Unscoped to count only non-soft-deleted records, but since we hard deleted above, this should be accurate
+	var remainingRefs int64
+	err = tx.Model(&models.UserFile{}).Where("file_hash = ?", userFile.FileHash).Count(&remainingRefs).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to count remaining file references: %w", err)
+	}
+
+	fmt.Printf("Remaining references for hash %s: %d\n", userFile.FileHash, remainingRefs)
+
+	if remainingRefs == 0 {
+		fmt.Printf("No more references, deleting file hash record for hash: %s\n", userFile.FileHash)
+
+		// Clean up any orphaned soft-deleted records first
+		fmt.Printf("Cleaning up orphaned soft-deleted records for hash: %s\n", userFile.FileHash)
+		cleanupResult := tx.Unscoped().Where("file_hash = ? AND deleted_at IS NOT NULL", userFile.FileHash).Delete(&models.UserFile{})
+		if cleanupResult.Error != nil {
+			fmt.Printf("Warning: failed to cleanup soft-deleted records: %v\n", cleanupResult.Error)
+		} else {
+			fmt.Printf("Cleaned up %d orphaned soft-deleted records\n", cleanupResult.RowsAffected)
+		}
+
 		// No more references, delete from storage and database
 		if err := s.storage.DeleteFile(context.Background(), fileHash.MinIOKey); err != nil {
-			// Log error but don't fail the transaction
-			fmt.Printf("Warning: failed to delete file from storage: %v\n", err)
+			// Log error but don't fail the transaction - storage cleanup can be retried later
+			fmt.Printf("Warning: failed to delete file from storage %s: %v\n", fileHash.MinIOKey, err)
 		}
 
 		if err := tx.Delete(&fileHash).Error; err != nil {
 			tx.Rollback()
+			fmt.Printf("ERROR: Failed to delete file hash record: %v\n", err)
 			return fmt.Errorf("failed to delete file hash record: %w", err)
 		}
+		fmt.Printf("Successfully deleted file hash record for hash: %s\n", userFile.FileHash)
 	} else {
-		// Update reference count
-		if err := tx.Model(&fileHash).Update("reference_count", newRefCount).Error; err != nil {
+		fmt.Printf("Still %d references remaining, updating reference count\n", remainingRefs)
+		// Update reference count to match actual count
+		if err := tx.Model(&fileHash).Update("reference_count", remainingRefs).Error; err != nil {
 			tx.Rollback()
 			return fmt.Errorf("failed to update reference count: %w", err)
 		}
 	}
 
-	return tx.Commit().Error
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to commit deletion transaction: %w", err)
+	}
+
+	return nil
 }
 
 // ToggleFilePublic toggles public/private status of a file

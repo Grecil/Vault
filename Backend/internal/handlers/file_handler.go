@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -41,6 +42,13 @@ func (h *FileHandler) GenerateUploadURL(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Ensure user exists in database before checking quota
+	_, err := h.userService.GetOrCreateUser(user.ID, user.Email, user.FirstName, user.LastName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize user"})
 		return
 	}
 
@@ -102,6 +110,13 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 		return
 	}
 
+	// Ensure user exists in database
+	_, err := h.userService.GetOrCreateUser(user.ID, user.Email, user.FirstName, user.LastName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize user"})
+		return
+	}
+
 	// Parse pagination parameters
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
@@ -126,7 +141,9 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"files": files,
+		"files":    files,
+		"total":    total,
+		"has_more": int64(offset+limit) < total,
 		"pagination": gin.H{
 			"page":        page,
 			"limit":       limit,
@@ -178,7 +195,10 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 		return
 	}
 
+	fmt.Printf("Attempting to delete file %s for user %s\n", fileID, user.ID)
+
 	if err := h.fileService.DeleteUserFile(user.ID, fileID); err != nil {
+		fmt.Printf("Error deleting file %s: %v\n", fileID, err)
 		// Check if it's a "not found" error
 		if strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -187,13 +207,15 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 			})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to delete file",
-				"code":  "DELETE_FAILED",
+				"error":   "Failed to delete file",
+				"code":    "DELETE_FAILED",
+				"details": err.Error(),
 			})
 		}
 		return
 	}
 
+	fmt.Printf("Successfully deleted file %s\n", fileID)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "File deleted successfully",
 	})
