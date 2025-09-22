@@ -18,7 +18,6 @@ A secure, modern file storage and sharing service built with Go and React. Uploa
 | Document | Description |
 |----------|-------------|
 | [Setup Guide](setup.md) | Complete local development setup with Docker |
-| [Railway Deployment](RAILWAY_DEPLOYMENT.md) | Production deployment on Railway |
 | [Design Document](design.md) | Architecture and technical specifications |
 | [API Documentation](http://localhost:8080/swagger/index.html) | Interactive API specs (when running) |
 
