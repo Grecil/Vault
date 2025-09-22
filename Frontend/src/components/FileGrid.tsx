@@ -19,11 +19,11 @@ interface FileGridProps {
 
 const FileGrid: React.FC<FileGridProps> = ({ files, onFileClick, onFileDelete, onToggleVisibility }) => {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
       {files.map((file) => (
         <div 
           key={file.id} 
-          className="bg-card border border-border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer group relative"
+          className="bg-card border border-border rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow cursor-pointer group relative"
           onClick={() => onFileClick?.(file)}
         >
           {/* Action buttons - always show but with better contrast */}
@@ -46,7 +46,7 @@ const FileGrid: React.FC<FileGridProps> = ({ files, onFileClick, onFileDelete, o
                   e.stopPropagation()
                   onFileDelete(file)
                 }}
-                className="p-1 bg-background/90 backdrop-blur-sm rounded text-xs text-destructive hover:bg-destructive hover:text-destructive-foreground shadow-sm"
+                className="p-1 bg-background/90 backdrop-blur-sm rounded text-xs text-primary hover:bg-primary hover:text-primary-foreground shadow-sm"
                 title="Delete file"
               >
                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -60,7 +60,7 @@ const FileGrid: React.FC<FileGridProps> = ({ files, onFileClick, onFileDelete, o
             {getFileIcon(file.type)}
             <div className="text-center">
               <p 
-                className="text-sm font-medium text-foreground break-words line-clamp-2 w-full max-w-full px-1" 
+                className="text-xs sm:text-sm font-medium text-foreground break-words line-clamp-2 w-full max-w-full px-1" 
                 title={file.name}
                 style={{ wordBreak: 'break-word', hyphens: 'auto' }}
               >
@@ -69,12 +69,12 @@ const FileGrid: React.FC<FileGridProps> = ({ files, onFileClick, onFileDelete, o
               <p className="text-xs text-muted-foreground">{file.size}</p>
               <div className="flex items-center justify-center mt-1">
                 {file.isPublic ? (
-                  <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                  <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-chart-2/20 text-chart-2 border border-chart-2/30">
                     <PublicIcon className="mr-1" />
                     Public
                   </span>
                 ) : (
-                  <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                  <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-muted text-muted-foreground border border-border">
                     <PrivateIcon className="mr-1" />
                     Private
                   </span>

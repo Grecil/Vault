@@ -26,7 +26,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const { statistics, loading: statsLoading, formatBytes } = useStorageStats()
 
   return (
-    <div className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
+    <div className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col h-full">
       {/* Logo */}
       <div className="p-6 border-b border-sidebar-border">
         <div className="flex items-center space-x-2">
@@ -77,8 +77,8 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         </ul>
       </nav>
 
-      {/* Storage Info */}
-      <div className="p-4 border-t border-sidebar-border">
+      {/* Storage Info - Stick to bottom */}
+      <div className="mt-auto p-4 border-t border-sidebar-border">
         <div className="space-y-2">
           {statsLoading ? (
             <div className="animate-pulse">
@@ -109,8 +109,8 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
               <div className="text-xs text-muted-foreground space-y-1">
                 <p>{formatBytes(statistics.storage_quota - statistics.total_storage)} remaining</p>
                 {statistics.savings.bytes > 0 && (
-                  <p className="text-green-600 dark:text-green-400">
-                    💾 Saved {formatBytes(statistics.savings.bytes)} ({statistics.savings.percentage.toFixed(1)}%)
+                  <p className="text-primary">
+                   Saved {formatBytes(statistics.savings.bytes)} ({statistics.savings.percentage.toFixed(1)}%)
                   </p>
                 )}
               </div>

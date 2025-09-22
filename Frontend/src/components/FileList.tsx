@@ -10,19 +10,19 @@ interface FileListProps {
   onToggleVisibility?: (file: FileItem) => void
 }
 
-const FileList: React.FC<FileListProps> = ({ files, onFileClick, onMoreClick, onFileDelete, onToggleVisibility }) => {
+const FileList: React.FC<FileListProps> = ({ files, onFileClick, onFileDelete, onToggleVisibility }) => {
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full min-w-[600px]">
           <thead className="bg-muted border-b border-border">
             <tr>
-              <th className="text-left py-3 px-4 font-medium text-foreground">Name</th>
-              <th className="text-left py-3 px-4 font-medium text-foreground">Size</th>
-              <th className="text-left py-3 px-4 font-medium text-foreground">Type</th>
-              <th className="text-left py-3 px-4 font-medium text-foreground">Visibility</th>
-              <th className="text-left py-3 px-4 font-medium text-foreground">Date</th>
-              <th className="text-left py-3 px-4 font-medium text-foreground">Actions</th>
+              <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm">Name</th>
+              <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm hidden sm:table-cell">Size</th>
+              <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm hidden md:table-cell">Type</th>
+              <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm">Visibility</th>
+              <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm hidden lg:table-cell">Date</th>
+              <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -32,33 +32,43 @@ const FileList: React.FC<FileListProps> = ({ files, onFileClick, onMoreClick, on
                 className="border-b border-border hover:bg-muted/50 transition-colors cursor-pointer"
                 onClick={() => onFileClick?.(file)}
               >
-                <td className="py-3 px-4">
-                  <div className="flex items-center space-x-3">
-                    {getFileIcon(file.type)}
-                    <span 
-                      className="text-foreground font-medium max-w-xs break-words line-clamp-2" 
-                      title={file.name}
-                      style={{ wordBreak: 'break-word', hyphens: 'auto' }}
-                    >
-                      {file.name}
-                    </span>
+                <td className="py-2 sm:py-3 px-3 sm:px-4">
+                  <div className="flex items-center space-x-2 sm:space-x-3">
+                    <div className="flex-shrink-0">
+                      {getFileIcon(file.type)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span 
+                        className="text-foreground font-medium text-xs sm:text-sm break-words line-clamp-2 block" 
+                        title={file.name}
+                        style={{ wordBreak: 'break-word', hyphens: 'auto' }}
+                      >
+                        {file.name}
+                      </span>
+                      {/* Show size and type on mobile in subtitle */}
+                      <div className="sm:hidden text-xs text-muted-foreground mt-1">
+                        {file.size} • {file.type}
+                      </div>
+                    </div>
                   </div>
                 </td>
-                <td className="py-3 px-4 text-muted-foreground">{file.size}</td>
-                <td className="py-3 px-4 text-muted-foreground capitalize">{file.type}</td>
-                <td className="py-3 px-4">
+                <td className="py-2 sm:py-3 px-3 sm:px-4 text-muted-foreground text-xs sm:text-sm hidden sm:table-cell">{file.size}</td>
+                <td className="py-2 sm:py-3 px-3 sm:px-4 text-muted-foreground text-xs sm:text-sm capitalize hidden md:table-cell">{file.type}</td>
+                <td className="py-2 sm:py-3 px-3 sm:px-4">
                   {file.isPublic ? (
-                    <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                      Public
+                    <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-chart-2/20 text-chart-2 border border-chart-2/30">
+                      <span className="hidden sm:inline">Public</span>
+                      <span className="sm:hidden">Pub</span>
                     </span>
                   ) : (
-                    <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
-                      Private
+                    <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-muted text-muted-foreground border border-border">
+                      <span className="hidden sm:inline">Private</span>
+                      <span className="sm:hidden">Prv</span>
                     </span>
                   )}
                 </td>
-                <td className="py-3 px-4 text-muted-foreground">{file.uploadDate}</td>
-                <td className="py-3 px-4">
+                <td className="py-2 sm:py-3 px-3 sm:px-4 text-muted-foreground text-xs sm:text-sm hidden lg:table-cell">{file.uploadDate}</td>
+                <td className="py-2 sm:py-3 px-3 sm:px-4">
                   <div className="flex items-center space-x-2">
                     {onToggleVisibility && (
                       <button 
@@ -74,7 +84,7 @@ const FileList: React.FC<FileListProps> = ({ files, onFileClick, onMoreClick, on
                     )}
                     {onFileDelete && (
                       <button 
-                        className="text-destructive hover:text-destructive-foreground hover:bg-destructive p-1 rounded transition-colors"
+                        className="text-primary hover:text-primary-foreground hover:bg-primary p-1 rounded transition-colors"
                         onClick={(e) => {
                           e.stopPropagation()
                           onFileDelete(file)

@@ -105,21 +105,21 @@ const FilesView: React.FC<FilesViewProps> = ({
     <div {...getRootProps()} className={getDropzoneClassName()}>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">My Files</h1>
-            <p className="text-muted-foreground">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">My Files</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
               {isDragActive 
                 ? "Drop files here to upload..." 
                 : "Manage and organize your files • Drag & drop to upload"
               }
             </p>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center justify-between sm:justify-end space-x-3">
             {/* Upload Button */}
-            <label className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:opacity-90 transition-opacity flex items-center space-x-2 cursor-pointer">
+            <label className="bg-primary text-primary-foreground px-3 sm:px-4 py-2 rounded-lg hover:opacity-90 transition-opacity flex items-center space-x-2 cursor-pointer text-sm sm:text-base">
               <input {...getInputProps()} />
-              <UploadIcon />
+              <UploadIcon className="w-4 h-4" />
               <span>Upload</span>
             </label>
             
@@ -132,8 +132,9 @@ const FilesView: React.FC<FilesViewProps> = ({
                     ? 'bg-background text-foreground shadow-sm' 
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
+                aria-label="Grid view"
               >
-                <GridIcon />
+                <GridIcon className="w-4 h-4" />
               </button>
               <button
                 onClick={() => onViewModeChange('list')}
@@ -142,8 +143,9 @@ const FilesView: React.FC<FilesViewProps> = ({
                     ? 'bg-background text-foreground shadow-sm' 
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
+                aria-label="List view"
               >
-                <ListIcon />
+                <ListIcon className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -194,17 +196,17 @@ const FilesView: React.FC<FilesViewProps> = ({
 
         {/* Empty State */}
         {files.length === 0 && uploadingFiles.length === 0 && (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-              <UploadIcon className="w-8 h-8 text-muted-foreground" />
+          <div className="text-center py-8 sm:py-12">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+              <UploadIcon className="w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-medium text-foreground mb-2">No files yet</h3>
-            <p className="text-muted-foreground mb-4">
+            <h3 className="text-base sm:text-lg font-medium text-foreground mb-2">No files yet</h3>
+            <p className="text-sm sm:text-base text-muted-foreground mb-4">
               Get started by uploading your first file
             </p>
-            <label className="bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:opacity-90 transition-opacity cursor-pointer inline-flex items-center space-x-2">
+            <label className="bg-primary text-primary-foreground px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:opacity-90 transition-opacity cursor-pointer inline-flex items-center space-x-2 text-sm sm:text-base">
               <input {...getInputProps()} />
-              <UploadIcon />
+              <UploadIcon className="w-4 h-4" />
               <span>Upload Files</span>
             </label>
           </div>

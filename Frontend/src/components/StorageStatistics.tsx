@@ -14,9 +14,9 @@ const StorageStatistics: React.FC = () => {
           <p className="text-muted-foreground">Your storage usage and deduplication savings</p>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="bg-card border border-border rounded-lg p-6 animate-pulse">
+            <div key={i} className="bg-card border border-border rounded-lg p-4 sm:p-6 animate-pulse">
               <div className="h-4 bg-muted rounded w-24 mb-2"></div>
               <div className="h-8 bg-muted rounded w-16 mb-1"></div>
               <div className="h-3 bg-muted rounded w-32"></div>
@@ -70,7 +70,7 @@ const StorageStatistics: React.FC = () => {
             d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
         </svg>
       ),
-      color: "text-blue-600 dark:text-blue-400"
+      color: "text-primary"
     },
     {
       title: "Original Size",
@@ -82,7 +82,7 @@ const StorageStatistics: React.FC = () => {
             d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       ),
-      color: "text-gray-600 dark:text-gray-400"
+      color: "text-primary"
     },
     {
       title: "Storage Saved",
@@ -94,7 +94,7 @@ const StorageStatistics: React.FC = () => {
             d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
       ),
-      color: "text-green-600 dark:text-green-400"
+      color: "text-primary"
     },
     {
       title: "Storage Quota",
@@ -106,7 +106,7 @@ const StorageStatistics: React.FC = () => {
             d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
         </svg>
       ),
-      color: "text-purple-600 dark:text-purple-400"
+      color: "text-primary"
     },
     {
       title: "Total Files",
@@ -118,7 +118,7 @@ const StorageStatistics: React.FC = () => {
             d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
         </svg>
       ),
-      color: "text-orange-600 dark:text-orange-400"
+      color: "text-primary"
     },
     {
       title: "Duplicates Avoided",
@@ -130,20 +130,20 @@ const StorageStatistics: React.FC = () => {
             d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
         </svg>
       ),
-      color: "text-indigo-600 dark:text-indigo-400"
+      color: "text-primary"
     }
   ]
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start space-y-4 sm:space-y-0">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Storage Statistics</h1>
-          <p className="text-muted-foreground">Your storage usage and deduplication savings</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Storage Statistics</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Your storage usage and deduplication savings</p>
         </div>
         <button
           onClick={triggerRefreshImmediate}
-          className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
+          className="px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-secondary/80 transition-colors text-sm sm:text-base self-start"
         >
           <svg className="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
@@ -154,9 +154,9 @@ const StorageStatistics: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {statsCards.map((card, index) => (
-          <div key={index} className="bg-card border border-border rounded-lg p-6 hover:shadow-lg transition-shadow">
+          <div key={index} className="bg-card border border-border rounded-lg p-4 sm:p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-start justify-between mb-4">
               <div className={`${card.color}`}>
                 {card.icon}
@@ -164,7 +164,7 @@ const StorageStatistics: React.FC = () => {
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-1">{card.title}</p>
-              <p className="text-2xl font-bold text-foreground mb-1">{card.value}</p>
+              <p className="text-xl sm:text-2xl font-bold text-foreground mb-1">{card.value}</p>
               <p className="text-xs text-muted-foreground">{card.subtitle}</p>
             </div>
           </div>
@@ -172,8 +172,8 @@ const StorageStatistics: React.FC = () => {
       </div>
 
       {/* Usage Progress */}
-      <div className="bg-card border border-border rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-foreground mb-4">Storage Usage</h3>
+      <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+        <h3 className="text-base sm:text-lg font-semibold text-foreground mb-4">Storage Usage</h3>
         <div className="space-y-4">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Used</span>
@@ -185,9 +185,9 @@ const StorageStatistics: React.FC = () => {
           <div className="w-full bg-muted rounded-full h-3">
             <div
               className={`h-3 rounded-full transition-all duration-500 ${
-                usagePercentage > 90 ? 'bg-red-500' : 
-                usagePercentage > 75 ? 'bg-yellow-500' : 
-                'bg-green-500'
+                usagePercentage > 90 ? 'bg-destructive' : 
+                usagePercentage > 75 ? 'bg-chart-3' : 
+                'bg-chart-2'
               }`}
               style={{ width: `${Math.min(usagePercentage, 100)}%` }}
             ></div>
