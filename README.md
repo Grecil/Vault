@@ -7,6 +7,7 @@ A secure, modern file storage and sharing service built with Go and React. Uploa
 - **Secure Authentication** - Powered by Clerk
 - **File Management** - Upload, download, delete files
 - **File Sharing** - Make a file private or public
+- **Search & Filtering** - Fuzzy Search and Sorting
 - **Object Storage** - MinIO backend for scalability
 - **Storage Quotas** - Per-user storage limits
 - **Rate Limiting** - Token Bucket Algorithm
