@@ -57,7 +57,7 @@ func Load() (*Config, error) {
 		MinIOEndpoint:  getEnv("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey: getEnv("MINIO_ACCESS_KEY", "minioadmin"),
 		MinIOSecretKey: getEnv("MINIO_SECRET_KEY", "minioadmin123"),
-		MinIOBucket:    getEnv("MINIO_BUCKET", "filevault-files"),
+		MinIOBucket:    getEnv("MINIO_BUCKET", "files"),
 		MinIOUseSSL:    getEnv("MINIO_USE_SSL", "false") == "true",
 
 		// Storage Configuration

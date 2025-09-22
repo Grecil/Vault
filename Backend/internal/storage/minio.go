@@ -10,6 +10,7 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/tags"
 )
 
 type MinIOStorage struct {
@@ -129,4 +130,47 @@ func (m *MinIOStorage) ListFiles(ctx context.Context, prefix string) ([]minio.Ob
 	}
 
 	return objects, nil
+}
+
+// SetObjectTags sets tags on an object
+func (m *MinIOStorage) SetObjectTags(ctx context.Context, objectKey string, tagMap map[string]string) error {
+	// Convert map to MinIO tags format
+	objectTags, err := tags.NewTags(tagMap, false)
+	if err != nil {
+		return fmt.Errorf("failed to create tags: %w", err)
+	}
+
+	err = m.client.PutObjectTagging(ctx, m.bucket, objectKey, objectTags, minio.PutObjectTaggingOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to set object tags: %w", err)
+	}
+	return nil
+}
+
+// GetObjectTags gets tags from an object
+func (m *MinIOStorage) GetObjectTags(ctx context.Context, objectKey string) (map[string]string, error) {
+	tags, err := m.client.GetObjectTagging(ctx, m.bucket, objectKey, minio.GetObjectTaggingOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object tags: %w", err)
+	}
+	return tags.ToMap(), nil
+}
+
+// RemoveObjectTags removes all tags from an object
+func (m *MinIOStorage) RemoveObjectTags(ctx context.Context, objectKey string) error {
+	err := m.client.RemoveObjectTagging(ctx, m.bucket, objectKey, minio.RemoveObjectTaggingOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to remove object tags: %w", err)
+	}
+	return nil
+}
+
+// GetPublicFileURL generates a clean public URL for tagged objects
+func (m *MinIOStorage) GetPublicFileURL(objectKey string) string {
+	// Generate clean public URL without authentication
+	scheme := "http"
+	if m.useSSL {
+		scheme = "https"
+	}
+	return fmt.Sprintf("%s://%s/%s/%s", scheme, m.endpoint, m.bucket, objectKey)
 }

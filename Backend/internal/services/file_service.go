@@ -26,19 +26,62 @@ func NewFileService(db *gorm.DB, storage *storage.MinIOStorage) *FileService {
 
 // GeneratePresignedUploadURL generates a presigned URL for file upload
 func (s *FileService) GeneratePresignedUploadURL(userID, filename, fileHash string, size int64, mimeType string) (*PresignedUploadResponse, error) {
-	// Use the hash provided by frontend for the object key
-	tempKey := fmt.Sprintf("temp/%s/%s", userID, fileHash)
+	// Check if file already exists (deduplication)
+	var existingFileHash models.FileHash
+	err := s.db.Where("hash = ?", fileHash).First(&existingFileHash).Error
+	if err == nil {
+		// File already exists, just create a UserFile record
+		userFile := models.UserFile{
+			ID:         uuid.New(),
+			UserID:     userID,
+			FileHash:   fileHash,
+			Filename:   filename,
+			IsPublic:   false,
+			UploadedAt: time.Now().UTC(),
+			UpdatedAt:  time.Now().UTC(),
+		}
+
+		// Create UserFile record and increment reference count in a transaction
+		tx := s.db.Begin()
+		if err := tx.Create(&userFile).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to create user file record for duplicate: %w", err)
+		}
+
+		if err := tx.Model(&existingFileHash).Update("reference_count", gorm.Expr("reference_count + 1")).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to update reference count for duplicate: %w", err)
+		}
+
+		if err := tx.Commit().Error; err != nil {
+			return nil, fmt.Errorf("failed to commit duplicate file transaction: %w", err)
+		}
+
+		return &PresignedUploadResponse{
+			UploadURL:    "", // No upload needed
+			ObjectKey:    "",
+			ExpiresAt:    time.Time{},
+			IsDuplicate:  true,
+			ExistingFile: &userFile,
+		}, nil
+	} else if err != gorm.ErrRecordNotFound {
+		return nil, fmt.Errorf("failed to check for existing file: %w", err)
+	}
+
+	// File doesn't exist, generate upload URL directly to final location
+	finalKey := fileHash // Simple hash-based key
 
 	// Generate presigned URL for upload (expires in 1 hour)
-	uploadURL, err := s.storage.GetUploadURL(context.Background(), tempKey, time.Hour)
+	uploadURL, err := s.storage.GetUploadURL(context.Background(), finalKey, time.Hour)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate upload URL: %w", err)
 	}
 
 	return &PresignedUploadResponse{
-		UploadURL: uploadURL,
-		ObjectKey: tempKey,
-		ExpiresAt: time.Now().Add(time.Hour),
+		UploadURL:   uploadURL,
+		ObjectKey:   finalKey,
+		ExpiresAt:   time.Now().Add(time.Hour),
+		IsDuplicate: false,
 	}, nil
 }
 
@@ -63,16 +106,13 @@ func (s *FileService) CompleteFileUpload(userID, objectKey, filename, mimeType, 
 	var fileHashRecord models.FileHash
 	err = tx.Where("hash = ?", fileHash).First(&fileHashRecord).Error
 	if err == gorm.ErrRecordNotFound {
-		// New file, create hash record
-		newObjectKey := fmt.Sprintf("files/%s", fileHash)
-
-		// Move file to permanent location (in production, you might do this differently)
+		// New file, create hash record (file is already at final location)
 		fileHashRecord = models.FileHash{
 			Hash:           fileHash,
 			Size:           fileInfo.Size,
 			MimeType:       mimeType,
 			ReferenceCount: 1,
-			MinIOKey:       newObjectKey,
+			MinIOKey:       objectKey, // objectKey is already the final location: files/{hash}
 			CreatedAt:      time.Now().UTC(),
 			UpdatedAt:      time.Now().UTC(),
 		}
@@ -85,11 +125,20 @@ func (s *FileService) CompleteFileUpload(userID, objectKey, filename, mimeType, 
 		tx.Rollback()
 		return nil, fmt.Errorf("failed to query file hash: %w", err)
 	} else {
-		// File already exists, increment reference count
+		// File already exists - this shouldn't happen since we check for duplicates earlier
+		// But if it does, increment reference count and clean up the duplicate upload
 		if err := tx.Model(&fileHashRecord).Update("reference_count", gorm.Expr("reference_count + 1")).Error; err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to update reference count: %w", err)
 		}
+
+		// Clean up the duplicate file that was just uploaded
+		go func() {
+			if err := s.storage.DeleteFile(context.Background(), objectKey); err != nil {
+				// Log error but don't fail the operation since this is just cleanup
+				fmt.Printf("Warning: failed to delete duplicate file %s: %v\n", objectKey, err)
+			}
+		}()
 	}
 
 	// Create UserFile record
@@ -173,10 +222,18 @@ func (s *FileService) GetFileDownloadURL(userID string, fileID uuid.UUID) (strin
 		return "", fmt.Errorf("file not found or access denied: %w", err)
 	}
 
-	// Generate presigned download URL (expires in 1 hour)
-	downloadURL, err := s.storage.GetFileURL(context.Background(), userFile.FileData.MinIOKey, time.Hour)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate download URL: %w", err)
+	var downloadURL string
+
+	// For public files, return clean public URL; for private files, return presigned URL
+	if userFile.IsPublic {
+		// Return clean public URL (no auth parameters)
+		downloadURL = s.storage.GetPublicFileURL(userFile.FileData.MinIOKey)
+	} else {
+		// Return presigned URL with short TTL for private files (1 minute)
+		downloadURL, err = s.storage.GetFileURL(context.Background(), userFile.FileData.MinIOKey, time.Minute)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate download URL: %w", err)
+		}
 	}
 
 	// Increment download count
@@ -276,12 +333,63 @@ func (s *FileService) DeleteUserFile(userID string, fileID uuid.UUID) error {
 
 // ToggleFilePublic toggles public/private status of a file
 func (s *FileService) ToggleFilePublic(userID string, fileID uuid.UUID) error {
-	err := s.db.Model(&models.UserFile{}).
-		Where("id = ? AND user_id = ?", fileID, userID).
-		Update("is_public", gorm.Expr("NOT is_public")).Error
+	// Get file info with current status
+	var userFile models.UserFile
+	err := s.db.Preload("FileData").Where("id = ? AND user_id = ?", fileID, userID).First(&userFile).Error
+	if err != nil {
+		return fmt.Errorf("file not found: %w", err)
+	}
+
+	// Calculate new public status
+	newPublicStatus := !userFile.IsPublic
+
+	// Start transaction for atomic update
+	tx := s.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Update database first
+	err = tx.Model(&userFile).Update("is_public", newPublicStatus).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to update database: %w", err)
+	}
+
+	// Update object tags in MinIO
+	ctx := context.Background()
+	if newPublicStatus {
+		// Make public: set tag
+		tags := map[string]string{"public": "true"}
+		fmt.Printf("Setting public tag on object: %s with tags: %v\n", userFile.FileData.MinIOKey, tags)
+		err = s.storage.SetObjectTags(ctx, userFile.FileData.MinIOKey, tags)
+		if err != nil {
+			fmt.Printf("Failed to set tags: %v\n", err)
+		} else {
+			fmt.Printf("Successfully set public tag on object: %s\n", userFile.FileData.MinIOKey)
+		}
+	} else {
+		// Make private: remove tags
+		fmt.Printf("Removing tags from object: %s\n", userFile.FileData.MinIOKey)
+		err = s.storage.RemoveObjectTags(ctx, userFile.FileData.MinIOKey)
+		if err != nil {
+			fmt.Printf("Failed to remove tags: %v\n", err)
+		} else {
+			fmt.Printf("Successfully removed tags from object: %s\n", userFile.FileData.MinIOKey)
+		}
+	}
 
 	if err != nil {
-		return fmt.Errorf("failed to toggle file public status: %w", err)
+		// Revert database change if MinIO operation failed
+		tx.Rollback()
+		return fmt.Errorf("failed to update object access: %w", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
@@ -309,9 +417,11 @@ func (s *FileService) GetPublicFileInfo(fileID uuid.UUID) (*PublicFileResponse, 
 
 // Response types
 type PresignedUploadResponse struct {
-	UploadURL string    `json:"upload_url"`
-	ObjectKey string    `json:"object_key"`
-	ExpiresAt time.Time `json:"expires_at"`
+	UploadURL    string           `json:"upload_url"`
+	ObjectKey    string           `json:"object_key"`
+	ExpiresAt    time.Time        `json:"expires_at"`
+	IsDuplicate  bool             `json:"is_duplicate"`
+	ExistingFile *models.UserFile `json:"existing_file,omitempty"`
 }
 
 type UserFileResponse struct {
