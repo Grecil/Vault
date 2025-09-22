@@ -55,7 +55,7 @@ Railway Services:
    # Set environment variables
    railway variables set GIN_MODE=release
    railway variables set CLERK_SECRET_KEY="your_clerk_secret_key"
-   railway variables set MINIO_BUCKET="filevault-files"
+   railway variables set MINIO_BUCKET="files"
    railway variables set MINIO_USE_SSL="false"
    
    # Deploy

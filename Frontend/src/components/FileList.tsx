@@ -21,7 +21,7 @@ const FileList: React.FC<FileListProps> = ({ files, onFileClick, onFileDelete, o
               <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm hidden sm:table-cell">Size</th>
               <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm hidden md:table-cell">Type</th>
               <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm">Visibility</th>
-              <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm hidden lg:table-cell">Date</th>
+              <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm hidden lg:table-cell">Uploaded at</th>
               <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm">Actions</th>
             </tr>
           </thead>

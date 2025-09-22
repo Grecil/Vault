@@ -213,7 +213,7 @@ const Dashboard = () => {
           try {
             if (!file?.uploadDate) return 'Unknown'
             const date = new Date(file.uploadDate)
-            return isNaN(date.getTime()) ? 'Unknown' : date.toLocaleDateString()
+            return isNaN(date.getTime()) ? 'Unknown' : date.toLocaleString()
           } catch (e) {
             return 'Unknown'
           }

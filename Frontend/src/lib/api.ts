@@ -130,7 +130,7 @@ export const apiClient = {
         name: file.filename,
         size: file.size,
         contentType: file.mime_type,
-        uploadDate: file.created_at,
+        uploadDate: file.uploaded_at,
         isPublic: file.is_public,
         downloadCount: file.download_count || 0,
         sha256: file.file_hash
@@ -206,7 +206,7 @@ export const apiClient = {
         name: data.filename,
         size: data.size,
         contentType: data.mime_type,
-        uploadDate: data.created_at,
+        uploadDate: data.uploaded_at,
         isPublic: data.is_public,
         sha256: data.file_hash
       }

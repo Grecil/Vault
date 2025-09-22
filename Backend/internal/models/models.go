@@ -58,7 +58,7 @@ func (u *UserFile) BeforeCreate(tx *gorm.DB) error {
 	if u.ID == uuid.Nil {
 		u.ID = uuid.New()
 	}
-	u.UploadedAt = time.Now()
+	u.UploadedAt = time.Now().UTC()
 	return nil
 }
 
@@ -77,7 +77,7 @@ func (s *ShareLink) BeforeCreate(tx *gorm.DB) error {
 	if s.ID == "" {
 		s.ID = GenerateRandomID(8)
 	}
-	s.CreatedAt = time.Now()
+	s.CreatedAt = time.Now().UTC()
 	return nil
 }
 
