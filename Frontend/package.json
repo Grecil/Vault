@@ -13,6 +13,7 @@
     "@clerk/clerk-react": "^5.47.0",
     "clerk-react": "^0.1.9",
     "frontend": ".",
+    "fuse.js": "^7.1.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-dropzone": "^14.3.8",

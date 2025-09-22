@@ -4,6 +4,7 @@ import { formatFileSize } from '../utils/crypto'
 import { useDarkMode } from '../hooks/useDarkMode'
 import { useFileUpload } from '../hooks/useFileUpload'
 import { useFiles } from '../hooks/useFiles'
+import { useFileSearch } from '../hooks/useFileSearch'
 import { useUser, useAuth } from '@clerk/clerk-react'
 import { useToast } from '../hooks/useToast'
 import { useStorageStatsRefreshTrigger } from '../hooks/useStorageStatsRefresh'
@@ -225,12 +226,20 @@ const Dashboard = () => {
     }
   })()
 
+  // Initialize fuzzy search
+  const {
+    searchQuery,
+    setSearchQuery,
+    searchResults,
+    clearSearch
+  } = useFileSearch(fileItems)
+
   const renderMainContent = () => {
     switch (activeTab) {
       case 'files':
         return (
           <FilesView
-            files={fileItems}
+            files={searchResults}
             viewMode={viewMode}
             onViewModeChange={handleViewModeChange}
             uploadingFiles={uploadingFiles}
@@ -364,9 +373,22 @@ const Dashboard = () => {
                   <input
                     type="text"
                     placeholder="Search files..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     className="bg-muted border border-border rounded-lg px-3 py-1 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring w-32 md:w-48"
                   />
-                  <SearchIcon className="w-3 h-3 absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                  {searchQuery ? (
+                    <button
+                      onClick={clearSearch}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <SearchIcon className="w-3 h-3 absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                  )}
                 </div>
                 
                 {/* Dark Mode Toggle */}
