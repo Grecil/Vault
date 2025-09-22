@@ -6,6 +6,9 @@ import FileList from './FileList'
 import UploadProgress from './UploadProgress'
 import { type UploadingFile } from '../hooks/useFileUpload'
 
+type SortField = 'name' | 'size' | 'type' | 'uploadDate' | 'visibility'
+type SortOrder = 'asc' | 'desc' | 'none'
+
 interface FilesViewProps {
   files: FileItem[]
   viewMode: 'grid' | 'list'
@@ -25,6 +28,10 @@ interface FilesViewProps {
   onFileDelete?: (fileId: string) => Promise<void>
   onFileToggleVisibility?: (fileId: string) => Promise<void>
   onFileDownload?: (fileId: string) => Promise<void>
+  // Sort props
+  sortField?: SortField | null
+  sortOrder?: SortOrder
+  onSort?: (field: SortField) => void
 }
 
 const FilesView: React.FC<FilesViewProps> = ({
@@ -45,7 +52,10 @@ const FilesView: React.FC<FilesViewProps> = ({
   error = null,
   onFileDelete,
   onFileToggleVisibility,
-  onFileDownload
+  onFileDownload,
+  sortField,
+  sortOrder,
+  onSort
 }) => {
   const { getRootProps, getInputProps } = useDropzone({
     onDrop,
@@ -190,6 +200,9 @@ const FilesView: React.FC<FilesViewProps> = ({
               onMoreClick={handleMoreClick}
               onFileDelete={handleFileDelete}
               onToggleVisibility={handleToggleVisibility}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              onSort={onSort}
             />
           )
         )}

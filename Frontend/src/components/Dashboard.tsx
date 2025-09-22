@@ -5,6 +5,7 @@ import { useDarkMode } from '../hooks/useDarkMode'
 import { useFileUpload } from '../hooks/useFileUpload'
 import { useFiles } from '../hooks/useFiles'
 import { useFileSearch } from '../hooks/useFileSearch'
+import { useFileSort } from '../hooks/useFileSort'
 import { useUser, useAuth } from '@clerk/clerk-react'
 import { useToast } from '../hooks/useToast'
 import { useStorageStatsRefreshTrigger } from '../hooks/useStorageStatsRefresh'
@@ -234,12 +235,20 @@ const Dashboard = () => {
     clearSearch
   } = useFileSearch(fileItems)
 
+  // Initialize sorting
+  const {
+    sortField,
+    sortOrder,
+    sortedFiles,
+    handleSort
+  } = useFileSort(searchResults)
+
   const renderMainContent = () => {
     switch (activeTab) {
       case 'files':
         return (
           <FilesView
-            files={searchResults}
+            files={sortedFiles}
             viewMode={viewMode}
             onViewModeChange={handleViewModeChange}
             uploadingFiles={uploadingFiles}
@@ -281,6 +290,9 @@ const Dashboard = () => {
                 showError('Download failed', err.message || 'Failed to download file')
               }
             }}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            onSort={handleSort}
           />
         )
       case 'shared':

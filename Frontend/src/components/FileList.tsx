@@ -2,26 +2,84 @@ import React from 'react'
 import { getFileIcon, PrivateIcon, PublicIcon } from './FileTypeIcons'
 import { type FileItem } from './FileGrid'
 
+type SortField = 'name' | 'size' | 'type' | 'uploadDate' | 'visibility'
+type SortOrder = 'asc' | 'desc' | 'none'
+
 interface FileListProps {
   files: FileItem[]
   onFileClick?: (file: FileItem) => void
   onMoreClick?: (file: FileItem) => void
   onFileDelete?: (file: FileItem) => void
   onToggleVisibility?: (file: FileItem) => void
+  // Sort props
+  sortField?: SortField | null
+  sortOrder?: SortOrder
+  onSort?: (field: SortField) => void
 }
 
-const FileList: React.FC<FileListProps> = ({ files, onFileClick, onFileDelete, onToggleVisibility }) => {
+const FileList: React.FC<FileListProps> = ({ 
+  files, 
+  onFileClick, 
+  onFileDelete, 
+  onToggleVisibility,
+  sortField,
+  sortOrder,
+  onSort
+}) => {
+  // Sort indicator component
+  const SortIndicator = ({ field }: { field: SortField }) => {
+    if (sortField !== field || sortOrder === 'none') {
+      return (
+        <svg className="w-3 h-3 text-muted-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+      )
+    }
+    
+    if (sortOrder === 'asc') {
+      return (
+        <svg className="w-3 h-3 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+        </svg>
+      )
+    }
+    
+    return (
+      <svg className="w-3 h-3 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    )
+  }
+
+  // Sortable header component
+  const SortableHeader = ({ field, children, className = "" }: { 
+    field: SortField
+    children: React.ReactNode
+    className?: string 
+  }) => (
+    <th 
+      className={`text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm ${
+        onSort ? 'cursor-pointer hover:bg-muted/50 transition-colors select-none' : ''
+      } ${className}`}
+      onClick={() => onSort?.(field)}
+    >
+      <div className="flex items-center space-x-1">
+        <span>{children}</span>
+        {onSort && <SortIndicator field={field} />}
+      </div>
+    </th>
+  )
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[600px]">
           <thead className="bg-muted border-b border-border">
             <tr>
-              <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm">Name</th>
-              <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm hidden sm:table-cell">Size</th>
-              <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm hidden md:table-cell">Type</th>
-              <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm">Visibility</th>
-              <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm hidden lg:table-cell">Uploaded at</th>
+              <SortableHeader field="name">Name</SortableHeader>
+              <SortableHeader field="size" className="hidden sm:table-cell">Size</SortableHeader>
+              <SortableHeader field="type" className="hidden md:table-cell">Type</SortableHeader>
+              <SortableHeader field="visibility">Visibility</SortableHeader>
+              <SortableHeader field="uploadDate" className="hidden lg:table-cell">Uploaded at</SortableHeader>
               <th className="text-left py-2 sm:py-3 px-3 sm:px-4 font-medium text-foreground text-xs sm:text-sm">Actions</th>
             </tr>
           </thead>
