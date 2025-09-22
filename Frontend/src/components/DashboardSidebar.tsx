@@ -29,7 +29,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       <div className="p-6 border-b border-sidebar-border">
         <div className="flex items-center space-x-2">
           <div className="w-8 h-8 bg-sidebar-primary rounded-lg flex items-center justify-center">
-            <VaultIcon className="text-sidebar-primary-foreground" />
+            <VaultIcon/>
           </div>
           <span className="text-xl font-bold text-sidebar-foreground">Vault</span>
         </div>

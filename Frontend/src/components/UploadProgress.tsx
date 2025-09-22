@@ -105,9 +105,9 @@ const UploadProgress: React.FC<UploadProgressProps> = ({
                 </p>
               )}
               
-              {fileEntry.status === 'completed' && fileEntry.fileInfo && (
+              {fileEntry.status === 'completed' && (
                 <p className="text-xs text-green-500 mt-1">
-                  Successfully uploaded • {(fileEntry.fileInfo.size / 1024 / 1024).toFixed(2)} MB
+                  Successfully uploaded • {(fileEntry.file.size / 1024 / 1024).toFixed(2)} MB
                 </p>
               )}
             </div>

@@ -4,7 +4,7 @@ import { formatFileSize } from '../utils/crypto'
 import { useDarkMode } from '../hooks/useDarkMode'
 import { useFileUpload } from '../hooks/useFileUpload'
 import { useFiles } from '../hooks/useFiles'
-import { useUser } from '@clerk/clerk-react'
+import { useUser, useAuth } from '@clerk/clerk-react'
 import { useToast } from '../hooks/useToast'
 import DashboardSidebar, { type SidebarItem } from './DashboardSidebar'
 import FilesView from './FilesView'
@@ -12,7 +12,10 @@ import { ToastContainer } from './Toast'
 import { SearchIcon, SunIcon, MoonIcon } from './FileTypeIcons'
 
 const Dashboard = () => {
-  const [activeTab, setActiveTab] = useState('files')
+  const [activeTab, setActiveTab] = useState(() => {
+    const savedTab = localStorage.getItem('activeTab')
+    return (savedTab && ['files', 'shared'].includes(savedTab)) ? savedTab : 'files'
+  })
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     const savedViewMode = localStorage.getItem('fileViewMode')
     return (savedViewMode as 'grid' | 'list') || 'grid'
@@ -21,7 +24,7 @@ const Dashboard = () => {
   const { isDarkMode, toggleDarkMode } = useDarkMode()
   const { 
     uploadingFiles, 
-    processFile, 
+    processFiles,
     removeFile, 
     clearCompleted, 
     clearAll 
@@ -39,6 +42,7 @@ const Dashboard = () => {
   } = useFiles()
   
   const { user } = useUser()
+  const { signOut } = useAuth()
   const { toasts, removeToast, success, error: showError } = useToast()
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -46,6 +50,11 @@ const Dashboard = () => {
   const handleViewModeChange = (mode: 'grid' | 'list') => {
     setViewMode(mode)
     localStorage.setItem('fileViewMode', mode)
+  }
+
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId)
+    localStorage.setItem('activeTab', tabId)
   }
 
   const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
@@ -68,11 +77,11 @@ const Dashboard = () => {
       })
     }
 
-    // Process accepted files
+    // Process accepted files as a batch
     if (acceptedFiles.length > 0) {
-      acceptedFiles.forEach(processFile)
+      processFiles(acceptedFiles)
     }
-  }, [processFile])
+  }, [processFiles])
 
   // Only enable dropzone for files tab
   const { isDragActive, isDragReject } = useDropzone({
@@ -100,16 +109,6 @@ const Dashboard = () => {
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
-        </svg>
-      )
-    },
-    {
-      id: 'settings',
-      name: 'Settings',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
       )
     }
@@ -244,23 +243,6 @@ const Dashboard = () => {
             </div>
           </div>
         )
-      case 'settings':
-        return (
-          <div className="space-y-6">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-              <p className="text-muted-foreground">Manage your account and preferences</p>
-            </div>
-            <div className="bg-card border border-border rounded-lg p-8 text-center">
-              <svg className="w-16 h-16 text-muted-foreground mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <p className="text-foreground font-medium mb-2">Settings panel</p>
-              <p className="text-muted-foreground">Configuration options coming soon</p>
-            </div>
-          </div>
-        )
       default:
         return null
     }
@@ -274,7 +256,7 @@ const Dashboard = () => {
       <DashboardSidebar
         sidebarItems={sidebarItems}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         fileCount={totalCount}
       />
 
@@ -309,6 +291,15 @@ const Dashboard = () => {
                 aria-label="Toggle dark mode"
               >
                 {isDarkMode ? <SunIcon className="w-4 h-4 text-foreground" /> : <MoonIcon className="w-4 h-4 text-foreground" />}
+              </button>
+              
+              {/* Logout Button */}
+              <button
+                onClick={() => signOut()}
+                className="px-4 py-2 rounded-lg border border-border bg-card hover:bg-muted transition-colors text-sm font-medium text-foreground"
+                aria-label="Sign out"
+              >
+                Sign Out
               </button>
             </div>
           </div>

@@ -1,21 +1,23 @@
 import { useState, useCallback } from 'react'
 import { useAuth } from '@clerk/clerk-react'
 import { calculateSHA256, formatFileSize } from '../utils/crypto'
-import { apiClient } from '../lib/api'
+import { apiClient, type BatchFileRequest, type BatchCompletedUpload } from '../lib/api'
 
 export interface UploadingFile {
   file: File
   id: string
   progress: number
-  status: 'pending' | 'hashing' | 'preparing' | 'uploading' | 'completed' | 'failed' | 'duplicate'
+  status: 'pending' | 'hashing' | 'preparing' | 'uploading' | 'completed' | 'failed' | 'duplicate' | 'quota_exceeded'
   error: string | null
   sha256: string
+  uploadId?: string
   existingFile?: any
   fileInfo?: any
 }
 
 export const useFileUpload = (maxFileSize: number = 10 * 1024 * 1024) => {
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([])
+  const [batchId, setBatchId] = useState<string | null>(null)
   const { getToken } = useAuth()
 
   const updateFileStatus = useCallback((fileId: string, updates: Partial<UploadingFile>) => {
@@ -55,89 +57,183 @@ export const useFileUpload = (maxFileSize: number = 10 * 1024 * 1024) => {
     })
   }
 
-  const processFile = async (file: File) => {
-    const fileId = Math.random().toString(36).substring(7)
-    const fileEntry: UploadingFile = {
-      file,
-      id: fileId,
-      progress: 0,
-      status: 'pending',
-      error: null,
-      sha256: '',
-    }
+  // Process multiple files as a batch
+  const processFiles = async (files: File[]) => {
+    // Validate and add files to the uploading list
+    const validFiles: File[] = []
+    const fileEntries: UploadingFile[] = []
 
-    setUploadingFiles(prev => [...prev, fileEntry])
-    updateFileStatus(fileId, { status: 'hashing' })
+    for (const file of files) {
+      const fileId = Math.random().toString(36).substring(7)
+      const fileEntry: UploadingFile = {
+        file,
+        id: fileId,
+        progress: 0,
+        status: 'pending',
+        error: null,
+        sha256: '',
+      }
 
-    try {
       // Validate file size
       if (file.size > maxFileSize) {
-        updateFileStatus(fileId, { 
-          status: 'failed', 
-          error: `File size exceeds ${formatFileSize(maxFileSize)} limit.` 
+        fileEntry.status = 'failed'
+        fileEntry.error = `File size exceeds ${formatFileSize(maxFileSize)} limit.`
+        fileEntries.push(fileEntry)
+        continue
+      }
+
+      validFiles.push(file)
+      fileEntries.push(fileEntry)
+    }
+
+    // Add all files to state at once
+    setUploadingFiles(prev => [...prev, ...fileEntries])
+
+    if (validFiles.length === 0) {
+      return // No valid files to process
+    }
+
+    try {
+      // Phase 1: Hash all files
+      const batchRequests: BatchFileRequest[] = []
+      
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i]
+        const fileEntry = fileEntries.find(entry => entry.file === file)
+        if (!fileEntry) continue
+
+        updateFileStatus(fileEntry.id, { status: 'hashing' })
+        
+        const sha256 = await calculateSHA256(file)
+        // Update both state and local array
+        updateFileStatus(fileEntry.id, { sha256, status: 'preparing' })
+        fileEntry.sha256 = sha256 // Update local array too
+        
+        batchRequests.push({
+          filename: file.name,
+          size: file.size,
+          mime_type: file.type || 'application/octet-stream',
+          file_hash: sha256
         })
-        return
       }
 
-      // Calculate SHA256
-      const sha256 = await calculateSHA256(file)
-      updateFileStatus(fileId, { sha256, status: 'preparing' })
+      // Phase 2: Batch prepare upload
+      const batchResponse = await apiClient.batchPrepareUpload(getToken, batchRequests)
+      setBatchId(batchResponse.batch_id)
 
-      // Prepare upload
-      const data = await apiClient.prepareUpload(
-        getToken,
-        file.name,
-        file.size,
-        file.type || 'application/octet-stream',
-        sha256
-      )
+      // Phase 3: Update file statuses based on server response
+      const filesToUpload: { fileEntry: UploadingFile; uploadId: string; presignedUrl: string }[] = []
+      
+      for (const responseFile of batchResponse.files) {
+        const fileEntry = fileEntries.find(entry => entry.sha256 === responseFile.file_hash)
+        if (!fileEntry) continue
 
-      const { uploadId, presignedUrl, isDuplicate, existingFile } = data
-
-      if (isDuplicate && existingFile) {
-        updateFileStatus(fileId, { status: 'duplicate', existingFile })
-        console.log('File is duplicate:', existingFile)
-        return
+        switch (responseFile.status) {
+          case 'duplicate':
+            updateFileStatus(fileEntry.id, { 
+              status: 'duplicate', 
+              existingFile: responseFile.existing_file 
+            })
+            break
+          
+          case 'quota_exceeded':
+            updateFileStatus(fileEntry.id, { 
+              status: 'quota_exceeded', 
+              error: responseFile.error || 'Storage quota exceeded' 
+            })
+            break
+          
+          case 'upload_required':
+            if (responseFile.upload_id && responseFile.presigned_url) {
+              updateFileStatus(fileEntry.id, { 
+                status: 'uploading',
+                uploadId: responseFile.upload_id 
+              })
+              filesToUpload.push({
+                fileEntry,
+                uploadId: responseFile.upload_id,
+                presignedUrl: responseFile.presigned_url
+              })
+            }
+            break
+          
+          case 'error':
+            updateFileStatus(fileEntry.id, { 
+              status: 'failed', 
+              error: responseFile.error || 'Unknown error' 
+            })
+            break
+        }
       }
 
-      if (!presignedUrl) {
-        throw new Error("Failed to get presigned URL.")
-      }
-
-      updateFileStatus(fileId, { status: 'uploading' })
-
-      // Upload to MinIO
-      await uploadFileToMinio(presignedUrl, file, (progress) => {
-        updateFileStatus(fileId, { progress })
+      // Phase 4: Upload files that need uploading
+      const uploadPromises = filesToUpload.map(async ({ fileEntry, uploadId, presignedUrl }) => {
+        try {
+          await uploadFileToMinio(presignedUrl, fileEntry.file, (progress) => {
+            updateFileStatus(fileEntry.id, { progress })
+          })
+          return { fileEntry, uploadId, success: true }
+        } catch (error: any) {
+          updateFileStatus(fileEntry.id, { 
+            status: 'failed', 
+            error: error.message || 'Upload failed' 
+          })
+          return { fileEntry, uploadId, success: false }
+        }
       })
 
-      // Complete upload
-      const completeData = await apiClient.completeUpload(
-        getToken, 
-        uploadId, 
-        file.name, 
-        file.type || 'application/octet-stream', 
-        sha256
-      )
+      const uploadResults = await Promise.all(uploadPromises)
 
-      if (completeData.success) {
-        updateFileStatus(fileId, { 
-          status: 'completed', 
-          fileInfo: completeData.file 
-        })
-        console.log('Upload completed:', completeData.file)
-        return completeData.file
-      } else {
-        throw new Error("Failed to complete upload on backend.")
+      // Phase 5: Complete successful uploads
+      const completedUploads: BatchCompletedUpload[] = uploadResults
+        .filter(result => result.success)
+        .map(result => ({
+          upload_id: result.uploadId,
+          file_hash: result.fileEntry.sha256,
+          filename: result.fileEntry.file.name,
+          mime_type: result.fileEntry.file.type || 'application/octet-stream'
+        }))
+
+      if (completedUploads.length > 0) {
+        const completeResponse = await apiClient.batchCompleteUpload(
+          getToken, 
+          batchResponse.batch_id, 
+          completedUploads
+        )
+
+        // Update completed files
+        for (let i = 0; i < completedUploads.length; i++) {
+          const completedUpload = completedUploads[i]
+          const fileEntry = fileEntries.find(entry => entry.sha256 === completedUpload.file_hash)
+          const completedFile = completeResponse.completed_files[i]
+          
+          if (fileEntry && completedFile) {
+            updateFileStatus(fileEntry.id, { 
+              status: 'completed', 
+              fileInfo: completedFile 
+            })
+          }
+        }
       }
 
     } catch (error: any) {
-      console.error("Upload error:", error)
-      updateFileStatus(fileId, { 
-        status: 'failed', 
-        error: error.message || 'Upload failed' 
+      console.error("Batch upload error:", error)
+      // Mark all pending/preparing files as failed
+      validFiles.forEach((file) => {
+        const fileEntry = fileEntries.find(entry => entry.file === file)
+        if (fileEntry && ['pending', 'hashing', 'preparing'].includes(fileEntry.status)) {
+          updateFileStatus(fileEntry.id, { 
+            status: 'failed', 
+            error: error.message || 'Batch upload failed' 
+          })
+        }
       })
     }
+  }
+
+  // Legacy single file support (now uses batch internally)
+  const processFile = async (file: File) => {
+    await processFiles([file])
   }
 
   const removeFile = useCallback((fileId: string) => {
@@ -155,10 +251,12 @@ export const useFileUpload = (maxFileSize: number = 10 * 1024 * 1024) => {
   return {
     uploadingFiles,
     processFile,
+    processFiles,
     removeFile,
     clearCompleted,
     clearAll,
     isUploading: uploadingFiles.some(file => file.status === 'uploading'),
     hasErrors: uploadingFiles.some(file => file.status === 'failed'),
+    batchId,
   }
 }

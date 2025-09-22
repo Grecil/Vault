@@ -48,6 +48,46 @@ export interface UpdateFileVisibilityResponse {
   }
 }
 
+// Batch upload types
+export interface BatchFileRequest {
+  filename: string
+  size: number
+  mime_type: string
+  file_hash: string
+}
+
+export interface BatchFileResponse {
+  file_hash: string
+  status: 'upload_required' | 'duplicate' | 'quota_exceeded' | 'error'
+  upload_id?: string
+  presigned_url?: string
+  existing_file?: FileInfo
+  error?: string
+}
+
+export interface BatchPrepareResponse {
+  batch_id: string
+  files: BatchFileResponse[]
+  quota_check: {
+    total_size_required: number
+    quota_available: boolean
+    quota_exceeded?: number
+  }
+}
+
+export interface BatchCompletedUpload {
+  upload_id: string
+  file_hash: string
+  filename: string
+  mime_type: string
+}
+
+export interface BatchCompleteResponse {
+  batch_id: string
+  completed_files: FileInfo[]
+  errors?: string[]
+}
+
 // API configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
 
@@ -233,6 +273,50 @@ export const apiClient = {
       url: data.download_url,
       expiresIn: data.expires_in || 3600
     }
+  },
+
+  // Batch upload preparation
+  batchPrepareUpload: async (
+    getToken: () => Promise<string | null>,
+    files: BatchFileRequest[]
+  ): Promise<BatchPrepareResponse> => {
+    const headers = await getAuthHeaders(getToken)
+    const response = await fetch(`${API_BASE_URL}/files/batch/prepare`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ files })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || `Batch prepare failed: ${response.statusText}`)
+    }
+
+    return response.json()
+  },
+
+  // Batch upload completion
+  batchCompleteUpload: async (
+    getToken: () => Promise<string | null>,
+    batchId: string,
+    completedUploads: BatchCompletedUpload[]
+  ): Promise<BatchCompleteResponse> => {
+    const headers = await getAuthHeaders(getToken)
+    const response = await fetch(`${API_BASE_URL}/files/batch/complete`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        batch_id: batchId,
+        completed_uploads: completedUploads
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || `Batch complete failed: ${response.statusText}`)
+    }
+
+    return response.json()
   },
 
   // Get user profile and storage info
