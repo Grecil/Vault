@@ -273,7 +273,16 @@ func (s *FileService) DeleteUserFile(userID string, fileID uuid.UUID) error {
 		return fmt.Errorf("failed to get file hash record: %w", err)
 	}
 
-	// Delete user file record first (hard delete to avoid foreign key issues)
+	// Delete any associated share links first to avoid foreign key constraint violations (hard delete)
+	fmt.Printf("Deleting share links for file: %s\n", fileID)
+	deleteShareLinksResult := tx.Unscoped().Where("user_file_id = ?", fileID).Delete(&models.ShareLink{})
+	if deleteShareLinksResult.Error != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to delete share links: %w", deleteShareLinksResult.Error)
+	}
+	fmt.Printf("Deleted %d share links for file: %s\n", deleteShareLinksResult.RowsAffected, fileID)
+
+	// Delete user file record (hard delete to avoid foreign key issues)
 	if err := tx.Unscoped().Delete(&userFile).Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("failed to delete user file: %w", err)

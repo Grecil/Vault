@@ -34,10 +34,10 @@ const FileGrid: React.FC<FileGridProps> = ({ files, onFileClick, onFileDelete, o
                   e.stopPropagation()
                   onToggleVisibility(file)
                 }}
-                className="p-1 bg-background/90 backdrop-blur-sm rounded text-xs text-foreground hover:bg-accent shadow-sm border border-border/50"
+                className="p-1 bg-background/90 backdrop-blur-sm rounded text-xs text-foreground hover:bg-accent shadow-sm"
                 title={file.isPublic ? "Make private" : "Make public"}
               >
-                {file.isPublic ? <PrivateIcon className="w-3 h-3" /> : <PublicIcon className="w-3 h-3" />}
+                {file.isPublic ? <PrivateIcon className="w-4 h-4" /> : <PublicIcon className="w-4 h-4" />}
               </button>
             )}
             {onFileDelete && (
@@ -46,7 +46,7 @@ const FileGrid: React.FC<FileGridProps> = ({ files, onFileClick, onFileDelete, o
                   e.stopPropagation()
                   onFileDelete(file)
                 }}
-                className="p-1 bg-background/90 backdrop-blur-sm rounded text-xs text-destructive hover:bg-destructive hover:text-destructive-foreground shadow-sm border border-border/50"
+                className="p-1 bg-background/90 backdrop-blur-sm rounded text-xs text-destructive hover:bg-destructive hover:text-destructive-foreground shadow-sm"
                 title="Delete file"
               >
                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
