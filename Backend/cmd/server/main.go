@@ -118,6 +118,8 @@ func main() {
 			{
 				files.POST("/upload-url", fileHandler.GenerateUploadURL)
 				files.POST("/complete", fileHandler.CompleteUpload)
+				files.POST("/batch/prepare", fileHandler.BatchPrepareUpload)
+				files.POST("/batch/complete", fileHandler.BatchCompleteUpload)
 				files.GET("", fileHandler.ListFiles)
 				files.GET("/:id/download", fileHandler.DownloadFile)
 				files.DELETE("/:id", fileHandler.DeleteFile)

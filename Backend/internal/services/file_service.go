@@ -440,3 +440,215 @@ type PublicFileResponse struct {
 	Size     int64     `json:"size"`
 	MimeType string    `json:"mime_type"`
 }
+
+// Batch upload types
+type BatchFileRequest struct {
+	Filename string `json:"filename"`
+	Size     int64  `json:"size"`
+	MimeType string `json:"mime_type"`
+	FileHash string `json:"file_hash"`
+}
+
+type BatchFileResponse struct {
+	FileHash     string      `json:"file_hash"`
+	Status       string      `json:"status"` // "upload_required", "duplicate", "quota_exceeded"
+	UploadID     string      `json:"upload_id,omitempty"`
+	PresignedURL string      `json:"presigned_url,omitempty"`
+	ExistingFile interface{} `json:"existing_file,omitempty"`
+	Error        string      `json:"error,omitempty"`
+}
+
+type BatchPrepareResponse struct {
+	BatchID    string              `json:"batch_id"`
+	Files      []BatchFileResponse `json:"files"`
+	QuotaCheck BatchQuotaCheck     `json:"quota_check"`
+}
+
+type BatchQuotaCheck struct {
+	TotalSizeRequired int64 `json:"total_size_required"`
+	QuotaAvailable    bool  `json:"quota_available"`
+	QuotaExceeded     int64 `json:"quota_exceeded,omitempty"`
+}
+
+type BatchCompletedUpload struct {
+	UploadID string `json:"upload_id"`
+	FileHash string `json:"file_hash"`
+	Filename string `json:"filename"`
+	MimeType string `json:"mime_type"`
+}
+
+type BatchCompleteResponse struct {
+	BatchID        string        `json:"batch_id"`
+	CompletedFiles []interface{} `json:"completed_files"`
+	Errors         []string      `json:"errors,omitempty"`
+}
+
+// BatchPrepareUpload prepares multiple files for upload
+func (s *FileService) BatchPrepareUpload(userID string, files []BatchFileRequest) (*BatchPrepareResponse, error) {
+	batchID := uuid.New().String()
+
+	// Calculate total size needed for new uploads
+	var totalSizeRequired int64
+	var duplicateHashes []string
+
+	// Check for duplicates first
+	fileHashes := make([]string, len(files))
+	for i, file := range files {
+		fileHashes[i] = file.FileHash
+	}
+
+	var existingHashes []models.FileHash
+	s.db.Where("hash IN ?", fileHashes).Find(&existingHashes)
+
+	existingHashMap := make(map[string]models.FileHash)
+	for _, hash := range existingHashes {
+		existingHashMap[hash.Hash] = hash
+		duplicateHashes = append(duplicateHashes, hash.Hash)
+	}
+
+	// Calculate size for non-duplicates
+	for _, file := range files {
+		if _, isDuplicate := existingHashMap[file.FileHash]; !isDuplicate {
+			totalSizeRequired += file.Size
+		}
+	}
+
+	// Check quota for new uploads only
+	quotaAvailable := true
+	var quotaExceeded int64
+	if totalSizeRequired > 0 {
+		// Get current storage usage
+		var currentUsage int64
+		s.db.Model(&models.FileHash{}).
+			Joins("JOIN user_files ON file_hashes.hash = user_files.file_hash").
+			Where("user_files.user_id = ?", userID).
+			Select("COALESCE(SUM(file_hashes.size), 0)").
+			Scan(&currentUsage)
+
+		const maxStorage = 10 * 1024 * 1024 * 1024 // 10GB
+		if currentUsage+totalSizeRequired > maxStorage {
+			quotaAvailable = false
+			quotaExceeded = (currentUsage + totalSizeRequired) - maxStorage
+		}
+	}
+
+	// Prepare response for each file
+	var fileResponses []BatchFileResponse
+
+	for _, file := range files {
+		if existingHash, isDuplicate := existingHashMap[file.FileHash]; isDuplicate {
+			// File is duplicate - create UserFile record
+			userFile := models.UserFile{
+				ID:         uuid.New(),
+				UserID:     userID,
+				FileHash:   file.FileHash,
+				Filename:   file.Filename,
+				IsPublic:   false,
+				UploadedAt: time.Now().UTC(),
+				UpdatedAt:  time.Now().UTC(),
+			}
+
+			// Create UserFile record in transaction
+			tx := s.db.Begin()
+			if err := tx.Create(&userFile).Error; err != nil {
+				tx.Rollback()
+				fileResponses = append(fileResponses, BatchFileResponse{
+					FileHash: file.FileHash,
+					Status:   "error",
+					Error:    "Failed to link duplicate file",
+				})
+				continue
+			}
+
+			// Increment reference count
+			if err := tx.Model(&existingHash).Update("reference_count", gorm.Expr("reference_count + 1")).Error; err != nil {
+				tx.Rollback()
+				fileResponses = append(fileResponses, BatchFileResponse{
+					FileHash: file.FileHash,
+					Status:   "error",
+					Error:    "Failed to update reference count",
+				})
+				continue
+			}
+
+			tx.Commit()
+
+			fileResponses = append(fileResponses, BatchFileResponse{
+				FileHash: file.FileHash,
+				Status:   "duplicate",
+				ExistingFile: map[string]interface{}{
+					"id":       userFile.ID,
+					"filename": file.Filename,
+					"size":     existingHash.Size,
+				},
+			})
+		} else if !quotaAvailable {
+			// Quota exceeded
+			fileResponses = append(fileResponses, BatchFileResponse{
+				FileHash: file.FileHash,
+				Status:   "quota_exceeded",
+				Error:    "Storage quota would be exceeded",
+			})
+		} else {
+			// Generate upload URL
+			uploadID := uuid.New().String()
+			objectKey := fmt.Sprintf("uploads/%s/%s", userID, uploadID)
+
+			presignedURL, err := s.storage.GetUploadURL(context.Background(), objectKey, 15*time.Minute)
+			if err != nil {
+				fileResponses = append(fileResponses, BatchFileResponse{
+					FileHash: file.FileHash,
+					Status:   "error",
+					Error:    "Failed to generate upload URL",
+				})
+				continue
+			}
+
+			fileResponses = append(fileResponses, BatchFileResponse{
+				FileHash:     file.FileHash,
+				Status:       "upload_required",
+				UploadID:     uploadID,
+				PresignedURL: presignedURL,
+			})
+		}
+	}
+
+	return &BatchPrepareResponse{
+		BatchID: batchID,
+		Files:   fileResponses,
+		QuotaCheck: BatchQuotaCheck{
+			TotalSizeRequired: totalSizeRequired,
+			QuotaAvailable:    quotaAvailable,
+			QuotaExceeded:     quotaExceeded,
+		},
+	}, nil
+}
+
+// BatchCompleteUpload completes multiple file uploads
+func (s *FileService) BatchCompleteUpload(userID, batchID string, completedUploads []BatchCompletedUpload) (*BatchCompleteResponse, error) {
+	var completedFiles []interface{}
+	var errors []string
+
+	for _, upload := range completedUploads {
+		objectKey := fmt.Sprintf("uploads/%s/%s", userID, upload.UploadID)
+
+		// Complete individual file upload
+		userFile, err := s.CompleteFileUpload(userID, objectKey, upload.Filename, upload.MimeType, upload.FileHash)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("Failed to complete upload for %s: %v", upload.Filename, err))
+			continue
+		}
+
+		completedFiles = append(completedFiles, map[string]interface{}{
+			"id":       userFile.ID,
+			"filename": userFile.Filename,
+			"size":     userFile.FileHash,
+		})
+	}
+
+	return &BatchCompleteResponse{
+		BatchID:        batchID,
+		CompletedFiles: completedFiles,
+		Errors:         errors,
+	}, nil
+}

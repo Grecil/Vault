@@ -255,6 +255,98 @@ func (h *FileHandler) TogglePublic(c *gin.Context) {
 	})
 }
 
+// BatchPrepareUpload handles batch file upload preparation
+func (h *FileHandler) BatchPrepareUpload(c *gin.Context) {
+	user := middleware.GetUserFromContext(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
+
+	var req struct {
+		Files []struct {
+			Filename string `json:"filename" binding:"required"`
+			Size     int64  `json:"size" binding:"required"`
+			MimeType string `json:"mime_type"`
+			FileHash string `json:"file_hash" binding:"required"`
+		} `json:"files" binding:"required,min=1,max=10"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Ensure user exists in database before checking quota
+	_, err := h.userService.GetOrCreateUser(user.ID, user.Email, user.FirstName, user.LastName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize user"})
+		return
+	}
+
+	// Convert request struct to service struct
+	files := make([]services.BatchFileRequest, len(req.Files))
+	for i, f := range req.Files {
+		files[i] = services.BatchFileRequest{
+			Filename: f.Filename,
+			Size:     f.Size,
+			MimeType: f.MimeType,
+			FileHash: f.FileHash,
+		}
+	}
+
+	response, err := h.fileService.BatchPrepareUpload(user.ID, files)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// BatchCompleteUpload handles batch file upload completion
+func (h *FileHandler) BatchCompleteUpload(c *gin.Context) {
+	user := middleware.GetUserFromContext(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
+
+	var req struct {
+		BatchID          string `json:"batch_id" binding:"required"`
+		CompletedUploads []struct {
+			UploadID string `json:"upload_id" binding:"required"`
+			FileHash string `json:"file_hash" binding:"required"`
+			Filename string `json:"filename" binding:"required"`
+			MimeType string `json:"mime_type"`
+		} `json:"completed_uploads" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Convert request struct to service struct
+	completedUploads := make([]services.BatchCompletedUpload, len(req.CompletedUploads))
+	for i, upload := range req.CompletedUploads {
+		completedUploads[i] = services.BatchCompletedUpload{
+			UploadID: upload.UploadID,
+			FileHash: upload.FileHash,
+			Filename: upload.Filename,
+			MimeType: upload.MimeType,
+		}
+	}
+
+	response, err := h.fileService.BatchCompleteUpload(user.ID, req.BatchID, completedUploads)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 // GetPublicFile returns public file info
 func (h *FileHandler) GetPublicFile(c *gin.Context) {
 	fileID, err := uuid.Parse(c.Param("id"))
