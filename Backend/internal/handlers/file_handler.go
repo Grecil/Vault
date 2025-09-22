@@ -1,11 +1,11 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"filevault-backend/internal/errors"
 	"filevault-backend/internal/middleware"
 	"filevault-backend/internal/services"
 
@@ -29,7 +29,7 @@ func NewFileHandler(fileService *services.FileService, userService *services.Use
 func (h *FileHandler) GenerateUploadURL(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, errors.UnauthorizedResponse("User not found"))
 		return
 	}
 
@@ -41,29 +41,26 @@ func (h *FileHandler) GenerateUploadURL(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, errors.ValidationErrorResponse("Invalid request body", err.Error()))
 		return
 	}
 
 	// Ensure user exists in database before checking quota
 	_, err := h.userService.GetOrCreateUser(user.ID, user.Email, user.FirstName, user.LastName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize user"})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrUserCreateFailed, "Failed to initialize user", err.Error()))
 		return
 	}
 
 	// Check storage quota
 	if err := h.userService.CheckStorageQuota(user.ID, req.Size); err != nil {
-		c.JSON(http.StatusPaymentRequired, gin.H{
-			"error": err.Error(),
-			"code":  "STORAGE_QUOTA_EXCEEDED",
-		})
+		c.JSON(http.StatusPaymentRequired, errors.ErrorResponse(errors.ErrStorageQuotaExceeded, err.Error()))
 		return
 	}
 
 	response, err := h.fileService.GeneratePresignedUploadURL(user.ID, req.Filename, req.FileHash, req.Size, req.MimeType)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate upload URL"})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrFileUploadFailed, "Failed to generate upload URL", err.Error()))
 		return
 	}
 
@@ -74,7 +71,7 @@ func (h *FileHandler) GenerateUploadURL(c *gin.Context) {
 func (h *FileHandler) CompleteUpload(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, errors.UnauthorizedResponse("User not found"))
 		return
 	}
 
@@ -86,13 +83,13 @@ func (h *FileHandler) CompleteUpload(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, errors.ValidationErrorResponse("Invalid request body", err.Error()))
 		return
 	}
 
 	userFile, err := h.fileService.CompleteFileUpload(user.ID, req.ObjectKey, req.Filename, req.MimeType, req.FileHash)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete upload"})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrFileUploadFailed, "Failed to complete upload", err.Error()))
 		return
 	}
 
@@ -106,14 +103,14 @@ func (h *FileHandler) CompleteUpload(c *gin.Context) {
 func (h *FileHandler) ListFiles(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, errors.UnauthorizedResponse("User not found"))
 		return
 	}
 
 	// Ensure user exists in database
 	_, err := h.userService.GetOrCreateUser(user.ID, user.Email, user.FirstName, user.LastName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize user"})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrUserCreateFailed, "Failed to initialize user", err.Error()))
 		return
 	}
 
@@ -136,7 +133,7 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 
 	files, total, err := h.fileService.GetUserFiles(user.ID, offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get files"})
+		c.JSON(http.StatusInternalServerError, errors.InternalServerErrorResponse("Failed to get files", err.Error()))
 		return
 	}
 
@@ -157,22 +154,19 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 func (h *FileHandler) DownloadFile(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, errors.UnauthorizedResponse("User not found"))
 		return
 	}
 
 	fileID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse(errors.ErrInvalidFileID, "Invalid file ID"))
 		return
 	}
 
 	downloadURL, err := h.fileService.GetFileDownloadURL(user.ID, fileID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "File not found or access denied",
-			"code":  "FILE_NOT_FOUND",
-		})
+		c.JSON(http.StatusNotFound, errors.ErrorResponse(errors.ErrFileNotFound, "File not found or access denied"))
 		return
 	}
 
@@ -185,37 +179,25 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 func (h *FileHandler) DeleteFile(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, errors.UnauthorizedResponse("User not found"))
 		return
 	}
 
 	fileID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse(errors.ErrInvalidFileID, "Invalid file ID"))
 		return
 	}
 
-	fmt.Printf("Attempting to delete file %s for user %s\n", fileID, user.ID)
-
 	if err := h.fileService.DeleteUserFile(user.ID, fileID); err != nil {
-		fmt.Printf("Error deleting file %s: %v\n", fileID, err)
 		// Check if it's a "not found" error
 		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": "File not found or access denied",
-				"code":  "FILE_NOT_FOUND",
-			})
+			c.JSON(http.StatusNotFound, errors.ErrorResponse(errors.ErrFileNotFound, "File not found or access denied"))
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":   "Failed to delete file",
-				"code":    "DELETE_FAILED",
-				"details": err.Error(),
-			})
+			c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrFileDeleteFailed, "Failed to delete file", err.Error()))
 		}
 		return
 	}
-
-	fmt.Printf("Successfully deleted file %s\n", fileID)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "File deleted successfully",
 	})
@@ -225,28 +207,22 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 func (h *FileHandler) TogglePublic(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, errors.UnauthorizedResponse("User not found"))
 		return
 	}
 
 	fileID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse(errors.ErrInvalidFileID, "Invalid file ID"))
 		return
 	}
 
 	// First toggle the public status
 	if err := h.fileService.ToggleFilePublic(user.ID, fileID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": "File not found or access denied",
-				"code":  "FILE_NOT_FOUND",
-			})
+			c.JSON(http.StatusNotFound, errors.ErrorResponse(errors.ErrFileNotFound, "File not found or access denied"))
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to toggle file public status",
-				"code":  "TOGGLE_FAILED",
-			})
+			c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrFileToggleFailed, "Failed to toggle file public status", err.Error()))
 		}
 		return
 	}
@@ -294,7 +270,7 @@ func (h *FileHandler) TogglePublic(c *gin.Context) {
 func (h *FileHandler) BatchPrepareUpload(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, errors.UnauthorizedResponse("User not found"))
 		return
 	}
 
@@ -308,14 +284,14 @@ func (h *FileHandler) BatchPrepareUpload(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, errors.ValidationErrorResponse("Invalid request body", err.Error()))
 		return
 	}
 
 	// Ensure user exists in database before checking quota
 	_, err := h.userService.GetOrCreateUser(user.ID, user.Email, user.FirstName, user.LastName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize user"})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrUserCreateFailed, "Failed to initialize user", err.Error()))
 		return
 	}
 
@@ -332,7 +308,7 @@ func (h *FileHandler) BatchPrepareUpload(c *gin.Context) {
 
 	response, err := h.fileService.BatchPrepareUpload(user.ID, files)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrFileUploadFailed, "Failed to prepare batch upload", err.Error()))
 		return
 	}
 
@@ -343,7 +319,7 @@ func (h *FileHandler) BatchPrepareUpload(c *gin.Context) {
 func (h *FileHandler) BatchCompleteUpload(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, errors.UnauthorizedResponse("User not found"))
 		return
 	}
 
@@ -358,7 +334,7 @@ func (h *FileHandler) BatchCompleteUpload(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, errors.ValidationErrorResponse("Invalid request body", err.Error()))
 		return
 	}
 
@@ -375,7 +351,7 @@ func (h *FileHandler) BatchCompleteUpload(c *gin.Context) {
 
 	response, err := h.fileService.BatchCompleteUpload(user.ID, req.BatchID, completedUploads)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrFileUploadFailed, "Failed to complete batch upload", err.Error()))
 		return
 	}
 
@@ -386,13 +362,13 @@ func (h *FileHandler) BatchCompleteUpload(c *gin.Context) {
 func (h *FileHandler) GetPublicFile(c *gin.Context) {
 	fileID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse(errors.ErrInvalidFileID, "Invalid file ID"))
 		return
 	}
 
 	fileInfo, err := h.fileService.GetPublicFileInfo(fileID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Public file not found"})
+		c.JSON(http.StatusNotFound, errors.ErrorResponse(errors.ErrFileNotFound, "Public file not found"))
 		return
 	}
 
@@ -403,13 +379,13 @@ func (h *FileHandler) GetPublicFile(c *gin.Context) {
 func (h *FileHandler) DownloadPublicFile(c *gin.Context) {
 	fileID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse(errors.ErrInvalidFileID, "Invalid file ID"))
 		return
 	}
 
 	downloadURL, err := h.fileService.GetFileDownloadURL("", fileID) // Empty userID for public access
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Public file not found"})
+		c.JSON(http.StatusNotFound, errors.ErrorResponse(errors.ErrFileNotFound, "Public file not found"))
 		return
 	}
 
@@ -422,14 +398,14 @@ func (h *FileHandler) DownloadPublicFile(c *gin.Context) {
 func (h *FileHandler) ShareFileDownload(c *gin.Context) {
 	shareID := c.Param("id")
 	if shareID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Share ID required"})
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse(errors.ErrInvalidShareID, "Share ID required"))
 		return
 	}
 
 	// Get file by share ID and increment download count
 	userFile, err := h.fileService.GetFileByShareID(shareID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Share link not found or file no longer available"})
+		c.JSON(http.StatusNotFound, errors.ErrorResponse(errors.ErrFileNotFound, "Share link not found or file no longer available"))
 		return
 	}
 
@@ -444,20 +420,20 @@ func (h *FileHandler) ShareFileDownload(c *gin.Context) {
 func (h *FileHandler) GetShareLink(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, errors.UnauthorizedResponse("User not found"))
 		return
 	}
 
 	fileID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse(errors.ErrInvalidFileID, "Invalid file ID"))
 		return
 	}
 
 	// Verify file exists and is public
 	files, _, err := h.fileService.GetUserFiles(user.ID, 0, 1000) // Get all files to find this one
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify file"})
+		c.JSON(http.StatusInternalServerError, errors.InternalServerErrorResponse("Failed to verify file", err.Error()))
 		return
 	}
 
@@ -470,14 +446,14 @@ func (h *FileHandler) GetShareLink(c *gin.Context) {
 	}
 
 	if !isPublic {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "File is not public"})
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse(errors.ErrFileAccessDenied, "File is not public"))
 		return
 	}
 
 	// Get or create share link
 	shareID, err := h.fileService.CreateOrGetShareLink(user.ID, fileID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get share link"})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrShareLinkFailed, "Failed to get share link", err.Error()))
 		return
 	}
 

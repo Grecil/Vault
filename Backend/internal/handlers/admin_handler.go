@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"filevault-backend/internal/errors"
 	"filevault-backend/internal/models"
 	"filevault-backend/internal/services"
 
@@ -44,7 +45,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 
 	users, total, err := h.userService.ListUsers(offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get users"})
+		c.JSON(http.StatusInternalServerError, errors.InternalServerErrorResponse("Failed to get users", err.Error()))
 		return
 	}
 
@@ -63,21 +64,15 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	userID := c.Param("id")
 	if userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "User ID required"})
+		c.JSON(http.StatusBadRequest, errors.ValidationErrorResponse("User ID required"))
 		return
 	}
 
 	if err := h.userService.DeleteUser(userID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": "User not found",
-				"code":  "USER_NOT_FOUND",
-			})
+			c.JSON(http.StatusNotFound, errors.ErrorResponse(errors.ErrUserNotFound, "User not found"))
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to delete user",
-				"code":  "DELETE_FAILED",
-			})
+			c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrUserDeleteFailed, "Failed to delete user", err.Error()))
 		}
 		return
 	}
@@ -91,7 +86,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
 	userID := c.Param("id")
 	if userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "User ID required"})
+		c.JSON(http.StatusBadRequest, errors.ValidationErrorResponse("User ID required"))
 		return
 	}
 
@@ -100,7 +95,7 @@ func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, errors.ValidationErrorResponse("Invalid request body", err.Error()))
 		return
 	}
 
@@ -112,12 +107,12 @@ func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
 	case "admin":
 		role = models.UserRoleAdmin
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role. Must be 'user' or 'admin'"})
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse(errors.ErrInvalidRole, "Invalid role. Must be 'user' or 'admin'"))
 		return
 	}
 
 	if err := h.userService.UpdateUserRole(userID, role); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user role"})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrUserUpdateFailed, "Failed to update user role", err.Error()))
 		return
 	}
 
@@ -130,7 +125,7 @@ func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
 func (h *AdminHandler) UpdateUserQuota(c *gin.Context) {
 	userID := c.Param("id")
 	if userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "User ID required"})
+		c.JSON(http.StatusBadRequest, errors.ValidationErrorResponse("User ID required"))
 		return
 	}
 
@@ -139,17 +134,17 @@ func (h *AdminHandler) UpdateUserQuota(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, errors.ValidationErrorResponse("Invalid request body", err.Error()))
 		return
 	}
 
 	if req.QuotaMB <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Quota must be greater than 0"})
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse(errors.ErrInvalidQuota, "Quota must be greater than 0"))
 		return
 	}
 
 	if err := h.userService.UpdateStorageQuota(userID, req.QuotaMB); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrUserUpdateFailed, "Failed to update storage quota", err.Error()))
 		return
 	}
 

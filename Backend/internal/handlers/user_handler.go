@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"filevault-backend/internal/errors"
 	"filevault-backend/internal/middleware"
 	"filevault-backend/internal/services"
 
@@ -23,14 +24,14 @@ func NewUserHandler(userService *services.UserService) *UserHandler {
 func (h *UserHandler) GetProfile(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, errors.UnauthorizedResponse("User not found"))
 		return
 	}
 
 	// Get or create user in database
 	dbUser, err := h.userService.GetOrCreateUser(user.ID, user.Email, user.FirstName, user.LastName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user profile"})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrUserCreateFailed, "Failed to get user profile", err.Error()))
 		return
 	}
 
@@ -53,13 +54,13 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 func (h *UserHandler) GetStorageInfo(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, errors.UnauthorizedResponse("User not found"))
 		return
 	}
 
 	used, quota, err := h.userService.GetUserStorageInfo(user.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get storage info"})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrStorageInfoFailed, "Failed to get storage info", err.Error()))
 		return
 	}
 
@@ -75,23 +76,20 @@ func (h *UserHandler) GetStorageInfo(c *gin.Context) {
 func (h *UserHandler) GetStorageStatistics(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, errors.UnauthorizedResponse("User not found"))
 		return
 	}
 
 	// Ensure user exists in database
 	_, err := h.userService.GetOrCreateUser(user.ID, user.Email, user.FirstName, user.LastName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user profile"})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrUserCreateFailed, "Failed to get user profile", err.Error()))
 		return
 	}
 
 	statistics, err := h.userService.GetStorageStatistics(user.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to get storage statistics",
-			"details": err.Error(),
-		})
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse(errors.ErrStorageStatsFailed, "Failed to get storage statistics", err.Error()))
 		return
 	}
 

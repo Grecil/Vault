@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"filevault-backend/internal/config"
+	"filevault-backend/internal/errors"
 	"filevault-backend/internal/models"
 	"filevault-backend/internal/services"
 
@@ -63,7 +64,7 @@ func RequireAuth(cfg *config.Config) gin.HandlerFunc {
 		// Get the session token from Authorization header or __session cookie
 		sessionToken := getSessionToken(c.Request)
 		if sessionToken == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization token required"})
+			c.JSON(http.StatusUnauthorized, errors.ErrorResponse(errors.ErrAuthRequired, "Authorization token required"))
 			c.Abort()
 			return
 		}
@@ -73,7 +74,7 @@ func RequireAuth(cfg *config.Config) gin.HandlerFunc {
 			Token: sessionToken,
 		})
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token format"})
+			c.JSON(http.StatusUnauthorized, errors.ErrorResponse(errors.ErrInvalidToken, "Invalid token format"))
 			c.Abort()
 			return
 		}
@@ -84,7 +85,7 @@ func RequireAuth(cfg *config.Config) gin.HandlerFunc {
 			JWKSClient: ClerkJWKSClient,
 		})
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Failed to verify token"})
+			c.JSON(http.StatusUnauthorized, errors.ErrorResponse(errors.ErrTokenVerificationFailed, "Failed to verify token"))
 			c.Abort()
 			return
 		}
@@ -96,7 +97,7 @@ func RequireAuth(cfg *config.Config) gin.HandlerFunc {
 			Leeway: time.Minute, // 1 minute leeway for clock skew
 		})
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token verification failed"})
+			c.JSON(http.StatusUnauthorized, errors.ErrorResponse(errors.ErrTokenVerificationFailed, "Token verification failed"))
 			c.Abort()
 			return
 		}
@@ -121,13 +122,13 @@ func RequireAdmin() gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
 		user := GetUserFromContext(c)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+			c.JSON(http.StatusUnauthorized, errors.ErrorResponse(errors.ErrAuthRequired, "Authentication required"))
 			c.Abort()
 			return
 		}
 
 		if user.Role != models.UserRoleAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+			c.JSON(http.StatusForbidden, errors.ErrorResponse(errors.ErrAdminAccessRequired, "Admin access required"))
 			c.Abort()
 			return
 		}
@@ -260,10 +261,7 @@ func RateLimit(rateLimitService *services.RateLimitService) gin.HandlerFunc {
 		if !result.Allowed {
 			retryAfter := time.Until(result.ResetTime).Seconds()
 			c.Header("Retry-After", fmt.Sprintf("%.0f", retryAfter))
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error":   "Too many requests. Please slow down.",
-				"message": "You are making requests too quickly. Please wait before trying again.",
-			})
+			c.JSON(http.StatusTooManyRequests, errors.ErrorResponse(errors.ErrRateLimitExceeded, "Too many requests. Please slow down.", "You are making requests too quickly. Please wait before trying again."))
 			c.Abort()
 			return
 		}

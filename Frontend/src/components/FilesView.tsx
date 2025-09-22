@@ -86,11 +86,6 @@ const FilesView: React.FC<FilesViewProps> = ({
     }
   }
 
-  const handleMoreClick = (file: FileItem) => {
-    console.log('More clicked for file:', file)
-    // TODO: Show context menu or file actions
-  }
-
   const handleFileDelete = async (file: FileItem) => {
     if (onFileDelete && confirm(`Are you sure you want to delete "${file.name}"?`)) {
       try {
@@ -197,7 +192,6 @@ const FilesView: React.FC<FilesViewProps> = ({
             <FileList 
               files={files} 
               onFileClick={handleFileClick}
-              onMoreClick={handleMoreClick}
               onFileDelete={handleFileDelete}
               onToggleVisibility={handleToggleVisibility}
               sortField={sortField}
