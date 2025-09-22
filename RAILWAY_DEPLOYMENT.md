@@ -59,7 +59,7 @@ Railway Services:
    MINIO_ENDPOINT=${{minio.RAILWAY_PRIVATE_DOMAIN}}:9000
    MINIO_ACCESS_KEY=${{minio.MINIO_ROOT_USER}}
    MINIO_SECRET_KEY=${{minio.MINIO_ROOT_PASSWORD}}
-   MINIO_BUCKET=filevault-files
+   MINIO_BUCKET=files
    MINIO_USE_SSL=false
    ```
 4. Go to **Settings** → **Networking** and enable public networking
@@ -83,7 +83,7 @@ After all services are running:
 
 1. Go to your MinIO service URL (from Railway dashboard)
 2. Login with your MINIO_ROOT_USER and MINIO_ROOT_PASSWORD
-3. Create a bucket named `filevault-files`
+3. Create a bucket named `files`
 4. Set bucket policy to public read for tagged objects
 
 ## Environment Variables Reference
@@ -97,7 +97,7 @@ CLERK_SECRET_KEY=sk_live_your_secret_key
 MINIO_ENDPOINT=${{minio.RAILWAY_PRIVATE_DOMAIN}}:9000
 MINIO_ACCESS_KEY=${{minio.MINIO_ROOT_USER}}
 MINIO_SECRET_KEY=${{minio.MINIO_ROOT_PASSWORD}}
-MINIO_BUCKET=filevault-files
+MINIO_BUCKET=files
 MINIO_USE_SSL=false
 ```
 
@@ -137,7 +137,7 @@ MINIO_ROOT_PASSWORD=your_secure_password_123
 - Check both services have public networking enabled
 
 **File Upload Errors:**
-- Ensure MinIO bucket `filevault-files` exists
+- Ensure MinIO bucket `files` exists
 - Verify MinIO is accessible from backend service
 
 ### Debug Commands

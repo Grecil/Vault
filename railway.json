@@ -31,7 +31,7 @@
         "MINIO_ENDPOINT": "${{minio.RAILWAY_PRIVATE_DOMAIN}}:9000",
         "MINIO_ACCESS_KEY": "${{minio.MINIO_ROOT_USER}}",
         "MINIO_SECRET_KEY": "${{minio.MINIO_ROOT_PASSWORD}}",
-        "MINIO_BUCKET": "filevault-files",
+        "MINIO_BUCKET": "files",
         "MINIO_USE_SSL": "false"
       }
     },
