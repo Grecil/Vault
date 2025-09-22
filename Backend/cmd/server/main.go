@@ -83,6 +83,9 @@ func main() {
 		c.JSON(http.StatusOK, healthStatus)
 	})
 
+	// Share routes (clean URLs for sharing - at root level)
+	router.GET("/share/:id", fileHandler.ShareFileDownload)
+
 	// API routes
 	api := router.Group("/api/v1")
 	{
@@ -111,6 +114,7 @@ func main() {
 			{
 				user.GET("/profile", userHandler.GetProfile)
 				user.GET("/storage", userHandler.GetStorageInfo)
+				user.GET("/storage/statistics", userHandler.GetStorageStatistics)
 			}
 
 			// File routes
@@ -122,6 +126,7 @@ func main() {
 				files.POST("/batch/complete", fileHandler.BatchCompleteUpload)
 				files.GET("", fileHandler.ListFiles)
 				files.GET("/:id/download", fileHandler.DownloadFile)
+				files.GET("/:id/share-link", fileHandler.GetShareLink)
 				files.DELETE("/:id", fileHandler.DeleteFile)
 				files.PATCH("/:id/public", fileHandler.TogglePublic)
 			}

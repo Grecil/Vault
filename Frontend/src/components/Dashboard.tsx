@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { formatFileSize } from '../utils/crypto'
 import { useDarkMode } from '../hooks/useDarkMode'
@@ -6,15 +6,17 @@ import { useFileUpload } from '../hooks/useFileUpload'
 import { useFiles } from '../hooks/useFiles'
 import { useUser, useAuth } from '@clerk/clerk-react'
 import { useToast } from '../hooks/useToast'
+import { useStorageStatsRefreshTrigger } from '../hooks/useStorageStatsRefresh'
 import DashboardSidebar, { type SidebarItem } from './DashboardSidebar'
 import FilesView from './FilesView'
+import StorageStatistics from './StorageStatistics'
 import { ToastContainer } from './Toast'
 import { SearchIcon, SunIcon, MoonIcon } from './FileTypeIcons'
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState(() => {
     const savedTab = localStorage.getItem('activeTab')
-    return (savedTab && ['files', 'shared'].includes(savedTab)) ? savedTab : 'files'
+    return (savedTab && ['files', 'shared', 'statistics'].includes(savedTab)) ? savedTab : 'files'
   })
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     const savedViewMode = localStorage.getItem('fileViewMode')
@@ -37,6 +39,7 @@ const Dashboard = () => {
     refreshFiles,
     deleteFile,
     toggleFileVisibility,
+    copyShareLink,
     downloadFile,
     totalCount
   } = useFiles()
@@ -44,6 +47,10 @@ const Dashboard = () => {
   const { user } = useUser()
   const { signOut } = useAuth()
   const { toasts, removeToast, success, error: showError } = useToast()
+  const { triggerRefresh } = useStorageStatsRefreshTrigger()
+
+  // Track which files have already shown toast notifications
+  const processedToastsRef = useRef<Set<string>>(new Set())
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
@@ -111,34 +118,68 @@ const Dashboard = () => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
         </svg>
       )
+    },
+    {
+      id: 'statistics',
+      name: 'Statistics',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      )
     }
   ]
 
   // Refresh files when upload completes and show notifications
   useEffect(() => {
-    const completedUploads = uploadingFiles.filter(f => f.status === 'completed')
-    const failedUploads = uploadingFiles.filter(f => f.status === 'failed')
-    const duplicateUploads = uploadingFiles.filter(f => f.status === 'duplicate')
+    const processedToasts = processedToastsRef.current
     
-    if (completedUploads.length > 0) {
+    // Filter for files that haven't shown toasts yet
+    const newCompletedUploads = uploadingFiles.filter(f => 
+      f.status === 'completed' && !processedToasts.has(f.id)
+    )
+    const newFailedUploads = uploadingFiles.filter(f => 
+      f.status === 'failed' && !processedToasts.has(f.id)
+    )
+    const newDuplicateUploads = uploadingFiles.filter(f => 
+      f.status === 'duplicate' && !processedToasts.has(f.id)
+    )
+    
+    // Handle completed uploads
+    if (newCompletedUploads.length > 0) {
       refreshFiles()
-      completedUploads.forEach(upload => {
+      triggerRefresh()
+      newCompletedUploads.forEach(upload => {
         success('File uploaded successfully', `${upload.file.name} has been uploaded`)
+        processedToasts.add(upload.id)
       })
     }
     
-    if (failedUploads.length > 0) {
-      failedUploads.forEach(upload => {
+    // Handle failed uploads
+    if (newFailedUploads.length > 0) {
+      newFailedUploads.forEach(upload => {
         showError('Upload failed', `Failed to upload ${upload.file.name}: ${upload.error}`)
+        processedToasts.add(upload.id)
       })
     }
     
-    if (duplicateUploads.length > 0) {
-      duplicateUploads.forEach(upload => {
+    // Handle duplicate uploads
+    if (newDuplicateUploads.length > 0) {
+      refreshFiles()
+      triggerRefresh()
+      newDuplicateUploads.forEach(upload => {
         success('File already exists', `${upload.file.name} was already in your vault`)
+        processedToasts.add(upload.id)
       })
     }
-  }, [uploadingFiles, refreshFiles, success, showError])
+
+    // Clean up processed toasts for files that are no longer in the uploadingFiles array
+    // This prevents memory leaks and allows re-showing toasts for re-uploaded files
+    const currentFileIds = new Set(uploadingFiles.map(f => f.id))
+    const toastsToRemove = Array.from(processedToasts).filter(id => !currentFileIds.has(id))
+    toastsToRemove.forEach(id => processedToasts.delete(id))
+    
+  }, [uploadingFiles, refreshFiles, success, showError, triggerRefresh])
 
   const getFileTypeFromMime = (mimeType: string): string => {
     if (mimeType.startsWith('image/')) return 'image'
@@ -212,8 +253,12 @@ const Dashboard = () => {
             }}
             onFileToggleVisibility={async (fileId: string) => {
               try {
-                await toggleFileVisibility(fileId)
+                const result = await toggleFileVisibility(fileId)
+                if (result.shareLink) {
+                  success('Link copied!', 'File is now public and the share link has been copied to your clipboard')
+                } else {
                 success('Visibility updated', 'File visibility has been changed')
+                }
               } catch (err: any) {
                 showError('Update failed', err.message || 'Failed to update file visibility')
               }
@@ -228,21 +273,99 @@ const Dashboard = () => {
           />
         )
       case 'shared':
+        const sharedFiles = fileItems?.filter(f => f?.isPublic) || []
         return (
           <div className="space-y-6">
             <div>
               <h1 className="text-2xl font-bold text-foreground">Shared Files</h1>
-              <p className="text-muted-foreground">Files you've shared publicly</p>
+              <p className="text-muted-foreground">Files you've shared publicly ({sharedFiles.length} files)</p>
             </div>
+            
+            {sharedFiles.length === 0 ? (
             <div className="bg-card border border-border rounded-lg p-8 text-center">
               <svg className="w-16 h-16 text-muted-foreground mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
               </svg>
-              <p className="text-foreground font-medium mb-2">Shared files view</p>
-              <p className="text-muted-foreground">Shows {fileItems?.filter(f => f?.isPublic)?.length || 0} public files</p>
+                <p className="text-foreground font-medium mb-2">No shared files</p>
+                <p className="text-muted-foreground">Make files public to share them with others</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {sharedFiles.map((file) => (
+                  <div key={file.id} className="bg-card border border-border rounded-lg p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-3 mb-2">
+                          <div className="flex-shrink-0">
+                            {/* File type icon */}
+                            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                              <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-lg font-medium text-foreground truncate">{file.name}</h3>
+                            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                              <span>{file.size}</span>
+                              <span>•</span>
+                              <span>Uploaded {file.uploadDate}</span>
+                              <span>•</span>
+                              <span>{files.find(f => f.id === file.id)?.downloadCount || 0} downloads</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2 ml-4">
+                        {/* Copy Link Button */}
+                        <button
+                          onClick={async () => {
+                            try {
+                              // Copy share link without toggling visibility
+                              await copyShareLink(file.id)
+                              success('Link copied!', 'Share link has been copied to your clipboard')
+                            } catch (err: any) {
+                              showError('Copy failed', err.message || 'Failed to copy share link')
+                            }
+                          }}
+                          className="inline-flex items-center px-3 py-2 border border-border rounded-md text-sm font-medium text-foreground bg-background hover:bg-muted transition-colors"
+                        >
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          Copy Link
+                        </button>
+                        
+                        {/* Make Private Button */}
+                        <button
+                          onClick={async () => {
+                            if (confirm(`Are you sure you want to make "${file.name}" private? The share link will stop working and won't be accessible to anyone.`)) {
+                              try {
+                                await toggleFileVisibility(file.id)
+                                success('File made private', 'Share link is no longer accessible')
+                              } catch (err: any) {
+                                showError('Update failed', err.message || 'Failed to make file private')
+                              }
+                            }
+                          }}
+                          className="inline-flex items-center px-3 py-2 border border-border rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        >
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                          </svg>
+                          Make Private
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
             </div>
+            )}
           </div>
         )
+      case 'statistics':
+        return <StorageStatistics />
       default:
         return null
     }

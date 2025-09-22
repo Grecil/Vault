@@ -1,6 +1,7 @@
 package models
 
 import (
+	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -59,4 +60,33 @@ func (u *UserFile) BeforeCreate(tx *gorm.DB) error {
 	}
 	u.UploadedAt = time.Now()
 	return nil
+}
+
+// ShareLink represents a clean shareable link for public files
+type ShareLink struct {
+	ID         string         `json:"id" gorm:"primaryKey;type:varchar(8)"` // Short random ID
+	UserFileID uuid.UUID      `json:"user_file_id" gorm:"type:uuid;not null;index"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+	DeletedAt  gorm.DeletedAt `json:"-" gorm:"index"`
+
+	UserFile UserFile `json:"user_file" gorm:"foreignKey:UserFileID"`
+}
+
+func (s *ShareLink) BeforeCreate(tx *gorm.DB) error {
+	if s.ID == "" {
+		s.ID = GenerateRandomID(8)
+	}
+	s.CreatedAt = time.Now()
+	return nil
+}
+
+// GenerateRandomID creates a random alphanumeric ID of specified length
+func GenerateRandomID(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	result := make([]byte, length)
+	for i := range result {
+		result[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(result)
 }

@@ -652,3 +652,89 @@ func (s *FileService) BatchCompleteUpload(userID, batchID string, completedUploa
 		Errors:         errors,
 	}, nil
 }
+
+// CreateOrGetShareLink creates or retrieves a share link for a public file
+func (s *FileService) CreateOrGetShareLink(userID string, fileID uuid.UUID) (string, error) {
+	// First verify the file exists and is public
+	var userFile models.UserFile
+	err := s.db.Where("id = ? AND user_id = ? AND is_public = ?", fileID, userID, true).First(&userFile).Error
+	if err != nil {
+		return "", fmt.Errorf("file not found or not public: %w", err)
+	}
+
+	// Check if share link already exists
+	var shareLink models.ShareLink
+	err = s.db.Where("user_file_id = ?", fileID).First(&shareLink).Error
+	if err == nil {
+		// Share link exists, return it
+		return shareLink.ID, nil
+	} else if err != gorm.ErrRecordNotFound {
+		return "", fmt.Errorf("failed to check existing share link: %w", err)
+	}
+
+	// Create new share link
+	shareLink = models.ShareLink{
+		UserFileID: fileID,
+	}
+
+	// Generate unique ID (retry if collision)
+	for attempts := 0; attempts < 10; attempts++ {
+		shareLink.ID = models.GenerateRandomID(8)
+		err = s.db.Create(&shareLink).Error
+		if err == nil {
+			return shareLink.ID, nil
+		}
+		// If it's a unique constraint error, try again with new ID
+		if attempts == 9 {
+			return "", fmt.Errorf("failed to create share link after retries: %w", err)
+		}
+	}
+
+	return "", fmt.Errorf("failed to create share link")
+}
+
+// DeleteShareLink removes a share link when file becomes private
+func (s *FileService) DeleteShareLink(userID string, fileID uuid.UUID) error {
+	// Verify file ownership
+	var userFile models.UserFile
+	err := s.db.Where("id = ? AND user_id = ?", fileID, userID).First(&userFile).Error
+	if err != nil {
+		return fmt.Errorf("file not found: %w", err)
+	}
+
+	// Delete share link
+	err = s.db.Where("user_file_id = ?", fileID).Delete(&models.ShareLink{}).Error
+	if err != nil {
+		return fmt.Errorf("failed to delete share link: %w", err)
+	}
+
+	return nil
+}
+
+// GetFileByShareID retrieves file info by share link ID and increments download count
+func (s *FileService) GetFileByShareID(shareID string) (*models.UserFile, error) {
+	var shareLink models.ShareLink
+	err := s.db.Preload("UserFile").Preload("UserFile.FileData").Where("id = ?", shareID).First(&shareLink).Error
+	if err != nil {
+		return nil, fmt.Errorf("share link not found: %w", err)
+	}
+
+	// Verify the file is still public
+	if !shareLink.UserFile.IsPublic {
+		return nil, fmt.Errorf("file is no longer public")
+	}
+
+	// Increment download count
+	err = s.db.Model(&shareLink.UserFile).Update("download_count", gorm.Expr("download_count + 1")).Error
+	if err != nil {
+		// Log error but don't fail the download
+		fmt.Printf("Warning: failed to increment download count: %v\n", err)
+	}
+
+	return &shareLink.UserFile, nil
+}
+
+// GetPublicFileURL returns the public URL for a file
+func (s *FileService) GetPublicFileURL(minioKey string) string {
+	return s.storage.GetPublicFileURL(minioKey)
+}

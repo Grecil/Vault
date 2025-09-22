@@ -89,10 +89,11 @@ func RequireAuth(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		// Verify the session
+		// Verify the session with 1 minute leeway for clock skew
 		claims, err := jwt.Verify(c.Request.Context(), &jwt.VerifyParams{
-			Token: sessionToken,
-			JWK:   jwk,
+			Token:  sessionToken,
+			JWK:    jwk,
+			Leeway: time.Minute, // 1 minute leeway for clock skew
 		})
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token verification failed"})
@@ -164,8 +165,9 @@ func OptionalAuth(cfg *config.Config) gin.HandlerFunc {
 		}
 
 		claims, err := jwt.Verify(c.Request.Context(), &jwt.VerifyParams{
-			Token: sessionToken,
-			JWK:   jwk,
+			Token:  sessionToken,
+			JWK:    jwk,
+			Leeway: time.Minute, // 1 minute leeway for clock skew
 		})
 		if err != nil {
 			c.Next()

@@ -150,3 +150,115 @@ func (s *UserService) DeleteUser(userID string) error {
 	}
 	return nil
 }
+
+// StorageStatistics represents comprehensive storage statistics for a user
+type StorageStatistics struct {
+	TotalStorage    int64   `json:"total_storage"`    // Deduplicated storage used in bytes
+	OriginalStorage int64   `json:"original_storage"` // Storage without deduplication in bytes
+	StorageQuota    int64   `json:"storage_quota"`    // User's storage quota in bytes
+	FileCount       int     `json:"file_count"`       // Total number of files owned
+	DuplicateCount  int     `json:"duplicate_count"`  // Number of duplicate files avoided
+	Savings         Savings `json:"savings"`          // Savings from deduplication
+}
+
+type Savings struct {
+	Bytes      int64   `json:"bytes"`      // Bytes saved through deduplication
+	Percentage float64 `json:"percentage"` // Percentage saved (0-100)
+}
+
+// GetStorageStatistics calculates comprehensive storage statistics for a user
+func (s *UserService) GetStorageStatistics(userID string) (*StorageStatistics, error) {
+	var stats StorageStatistics
+	var err error
+
+	// Get user's quota
+	var user models.User
+	err = s.db.Select("storage_quota").Where("id = ?", userID).First(&user).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+	stats.StorageQuota = user.StorageQuota
+
+	// Get total file count for this user
+	var fileCount int64
+	err = s.db.Model(&models.UserFile{}).Where("user_id = ?", userID).Count(&fileCount).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to count user files: %w", err)
+	}
+	stats.FileCount = int(fileCount)
+
+	// Calculate deduplicated storage (what the user is actually using)
+	// This is the sum of unique file sizes that this user has
+	type DeduplicatedResult struct {
+		TotalSize int64
+	}
+	var deduplicatedResult DeduplicatedResult
+
+	err = s.db.Model(&models.FileHash{}).
+		Select("COALESCE(SUM(DISTINCT file_hashes.size), 0) as total_size").
+		Joins("JOIN user_files ON file_hashes.hash = user_files.file_hash").
+		Where("user_files.user_id = ?", userID).
+		Scan(&deduplicatedResult).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate deduplicated storage: %w", err)
+	}
+	stats.TotalStorage = deduplicatedResult.TotalSize
+
+	// Calculate original storage (sum of all file sizes without deduplication)
+	// This is what the storage would be if we didn't deduplicate
+	type OriginalResult struct {
+		TotalSize int64
+	}
+	var originalResult OriginalResult
+
+	err = s.db.Model(&models.UserFile{}).
+		Select("COALESCE(SUM(file_hashes.size), 0) as total_size").
+		Joins("JOIN file_hashes ON user_files.file_hash = file_hashes.hash").
+		Where("user_files.user_id = ?", userID).
+		Scan(&originalResult).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate original storage: %w", err)
+	}
+	stats.OriginalStorage = originalResult.TotalSize
+
+	// Calculate duplicate count (files that would have been duplicates)
+	// This is the number of user files minus the number of unique hashes
+	type UniqueHashCount struct {
+		Count int64
+	}
+	var uniqueHashCount UniqueHashCount
+
+	err = s.db.Model(&models.UserFile{}).
+		Select("COUNT(DISTINCT file_hash) as count").
+		Where("user_id = ?", userID).
+		Scan(&uniqueHashCount).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to count unique hashes: %w", err)
+	}
+
+	stats.DuplicateCount = stats.FileCount - int(uniqueHashCount.Count)
+	if stats.DuplicateCount < 0 {
+		stats.DuplicateCount = 0 // Safety check
+	}
+
+	// Calculate savings
+	stats.Savings.Bytes = stats.OriginalStorage - stats.TotalStorage
+	if stats.Savings.Bytes < 0 {
+		stats.Savings.Bytes = 0 // Safety check
+	}
+
+	if stats.OriginalStorage > 0 {
+		stats.Savings.Percentage = float64(stats.Savings.Bytes) / float64(stats.OriginalStorage) * 100
+	} else {
+		stats.Savings.Percentage = 0
+	}
+
+	// Ensure percentage is within valid range
+	if stats.Savings.Percentage < 0 {
+		stats.Savings.Percentage = 0
+	} else if stats.Savings.Percentage > 100 {
+		stats.Savings.Percentage = 100
+	}
+
+	return &stats, nil
+}

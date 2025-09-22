@@ -1,6 +1,7 @@
 import React from 'react'
 import { useUser } from '@clerk/clerk-react'
 import { VaultIcon } from './FileTypeIcons'
+import { useStorageStats } from '../hooks/useStorageStats'
 
 export interface SidebarItem {
   id: string
@@ -22,6 +23,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   fileCount
 }) => {
   const { user } = useUser()
+  const { statistics, loading: statsLoading, formatBytes } = useStorageStats()
 
   return (
     <div className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
@@ -78,14 +80,46 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       {/* Storage Info */}
       <div className="p-4 border-t border-sidebar-border">
         <div className="space-y-2">
-          <div className="flex justify-between text-xs">
-            <span className="text-muted-foreground">Storage Used</span>
-            <span className="text-sidebar-foreground font-medium">2.1 GB / 10 GB</span>
-          </div>
-          <div className="w-full bg-muted rounded-full h-2">
-            <div className="bg-sidebar-primary h-2 rounded-full" style={{ width: '21%' }}></div>
-          </div>
-          <p className="text-xs text-muted-foreground">7.9 GB remaining</p>
+          {statsLoading ? (
+            <div className="animate-pulse">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Loading...</span>
+                <div className="h-3 bg-muted rounded w-16"></div>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2 mt-1">
+                <div className="bg-muted h-2 rounded-full"></div>
+              </div>
+            </div>
+          ) : statistics ? (
+            <>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Storage Used</span>
+                <span className="text-sidebar-foreground font-medium">
+                  {formatBytes(statistics.total_storage)} / {formatBytes(statistics.storage_quota)}
+                </span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2">
+                <div 
+                  className="bg-sidebar-primary h-2 rounded-full transition-all duration-300" 
+                  style={{ 
+                    width: `${Math.min((statistics.total_storage / statistics.storage_quota) * 100, 100)}%` 
+                  }}
+                ></div>
+              </div>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>{formatBytes(statistics.storage_quota - statistics.total_storage)} remaining</p>
+                {statistics.savings.bytes > 0 && (
+                  <p className="text-green-600 dark:text-green-400">
+                    💾 Saved {formatBytes(statistics.savings.bytes)} ({statistics.savings.percentage.toFixed(1)}%)
+                  </p>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="text-xs text-muted-foreground">
+              <p>Unable to load storage info</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

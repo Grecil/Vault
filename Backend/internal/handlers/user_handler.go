@@ -70,3 +70,30 @@ func (h *UserHandler) GetStorageInfo(c *gin.Context) {
 		"usage_percent": float64(used) / float64(quota) * 100,
 	})
 }
+
+// GetStorageStatistics returns comprehensive storage statistics for the user
+func (h *UserHandler) GetStorageStatistics(c *gin.Context) {
+	user := middleware.GetUserFromContext(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Ensure user exists in database
+	_, err := h.userService.GetOrCreateUser(user.ID, user.Email, user.FirstName, user.LastName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user profile"})
+		return
+	}
+
+	statistics, err := h.userService.GetStorageStatistics(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get storage statistics",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, statistics)
+}

@@ -8,6 +8,7 @@ export interface FileInfo {
   contentType: string
   uploadDate: string
   isPublic: boolean
+  downloadCount?: number
   sha256?: string
 }
 
@@ -46,6 +47,7 @@ export interface UpdateFileVisibilityResponse {
     id: string
     isPublic: boolean
   }
+  shareLink?: string
 }
 
 // Batch upload types
@@ -130,6 +132,7 @@ export const apiClient = {
         contentType: file.mime_type,
         uploadDate: file.created_at,
         isPublic: file.is_public,
+        downloadCount: file.download_count || 0,
         sha256: file.file_hash
       })),
       totalCount: data.total || 0,
@@ -247,9 +250,10 @@ export const apiClient = {
     return {
       success: true,
       file: {
-        id: data.file_id,
+        id: fileId,
         isPublic: data.is_public
-      }
+      },
+      shareLink: data.share_link
     }
   },
 
@@ -314,6 +318,24 @@ export const apiClient = {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       throw new Error(errorData.error || `Batch complete failed: ${response.statusText}`)
+    }
+
+    return response.json()
+  },
+
+  // Get share link for a public file
+  getShareLink: async (
+    getToken: () => Promise<string | null>,
+    fileId: string
+  ): Promise<{ share_link: string }> => {
+    const headers = await getAuthHeaders(getToken)
+    const response = await fetch(`${API_BASE_URL}/files/${fileId}/share-link`, {
+      method: 'GET',
+      headers,
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to get share link: ${response.statusText}`)
     }
 
     return response.json()
