@@ -1,6 +1,6 @@
 # <img src="Frontend\public\vault.svg"> Vault
 
-A secure, modern file storage and sharing service built with Go and React. Upload, manage, and share files with granular permissions and admin controls.
+A secure, modern file storage and sharing service built with Go and React. Upload, manage, and share files with ease. You can access it at [vault.grecil.in](https://vault.grecil.in/).
 
 ## Features
 
