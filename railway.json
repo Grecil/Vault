@@ -7,7 +7,7 @@
         "rootDirectory": "/Frontend"
       },
       "build": {
-        "dockerfile": "Dockerfile"
+        "dockerfile": "Dockerfile.railway"
       },
       "variables": {
         "VITE_API_URL": "${{backend.RAILWAY_PUBLIC_DOMAIN}}",
@@ -21,7 +21,7 @@
         "rootDirectory": "/Backend"
       },
       "build": {
-        "dockerfile": "Dockerfile"
+        "dockerfile": "Dockerfile.railway"
       },
       "variables": {
         "DATABASE_URL": "${{Postgres.DATABASE_URL}}",
@@ -32,7 +32,7 @@
         "MINIO_ACCESS_KEY": "${{minio.MINIO_ROOT_USER}}",
         "MINIO_SECRET_KEY": "${{minio.MINIO_ROOT_PASSWORD}}",
         "MINIO_BUCKET": "filevault-files",
-        "MINIO_USE_SSL": "false",
+        "MINIO_USE_SSL": "false"
       }
     },
     "minio": {

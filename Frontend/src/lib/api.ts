@@ -91,7 +91,7 @@ export interface BatchCompleteResponse {
 }
 
 // API configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1'
 
 // Helper function to get auth headers
 const getAuthHeaders = async (getToken: () => Promise<string | null>) => {
