@@ -20,7 +20,17 @@ func NewUserHandler(userService *services.UserService) *UserHandler {
 	}
 }
 
-// GetProfile returns the current user's profile
+// GetProfile godoc
+// @Summary Get user profile
+// @Description Returns the current authenticated user's profile information
+// @Tags users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "User profile"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /user/profile [get]
 func (h *UserHandler) GetProfile(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
@@ -50,7 +60,17 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	})
 }
 
-// GetStorageInfo returns user's storage usage information
+// GetStorageInfo godoc
+// @Summary Get storage information
+// @Description Returns the current user's storage usage and quota information
+// @Tags users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "Storage information"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /user/storage [get]
 func (h *UserHandler) GetStorageInfo(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
@@ -72,7 +92,17 @@ func (h *UserHandler) GetStorageInfo(c *gin.Context) {
 	})
 }
 
-// GetStorageStatistics returns comprehensive storage statistics for the user
+// GetStorageStatistics godoc
+// @Summary Get storage statistics
+// @Description Returns comprehensive storage statistics for the current user
+// @Tags users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "Storage statistics"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /user/storage/statistics [get]
 func (h *UserHandler) GetStorageStatistics(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {

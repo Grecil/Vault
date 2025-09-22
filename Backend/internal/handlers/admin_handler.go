@@ -24,7 +24,20 @@ func NewAdminHandler(userService *services.UserService, fileService *services.Fi
 	}
 }
 
-// ListUsers returns paginated list of all users
+// ListUsers godoc
+// @Summary List all users (Admin only)
+// @Description Returns a paginated list of all users
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Items per page" default(50) maximum(100)
+// @Success 200 {object} map[string]interface{} "List of users with pagination"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /admin/users [get]
 func (h *AdminHandler) ListUsers(c *gin.Context) {
 	// Parse pagination parameters
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -60,7 +73,21 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	})
 }
 
-// DeleteUser deletes a user
+// DeleteUser godoc
+// @Summary Delete user (Admin only)
+// @Description Deletes a user from the system
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "User ID"
+// @Success 200 {object} map[string]interface{} "User deleted successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 404 {object} map[string]interface{} "User not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /admin/users/{id} [delete]
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	userID := c.Param("id")
 	if userID == "" {
@@ -82,7 +109,21 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	})
 }
 
-// UpdateUserRole updates a user's role
+// UpdateUserRole godoc
+// @Summary Update user role (Admin only)
+// @Description Updates a user's role (user or admin)
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "User ID"
+// @Param request body object{role=string} true "Role update request"
+// @Success 200 {object} map[string]interface{} "User role updated successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /admin/users/{id}/role [patch]
 func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
 	userID := c.Param("id")
 	if userID == "" {
@@ -121,7 +162,21 @@ func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
 	})
 }
 
-// UpdateUserQuota updates a user's storage quota
+// UpdateUserQuota godoc
+// @Summary Update user storage quota (Admin only)
+// @Description Updates a user's storage quota in MB
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "User ID"
+// @Param request body object{quota_mb=int64} true "Quota update request"
+// @Success 200 {object} map[string]interface{} "User storage quota updated successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /admin/users/{id}/quota [patch]
 func (h *AdminHandler) UpdateUserQuota(c *gin.Context) {
 	userID := c.Param("id")
 	if userID == "" {
@@ -154,7 +209,17 @@ func (h *AdminHandler) UpdateUserQuota(c *gin.Context) {
 	})
 }
 
-// GetStats returns system statistics
+// GetStats godoc
+// @Summary Get system statistics (Admin only)
+// @Description Returns system-wide statistics
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "System statistics"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Router /admin/stats [get]
 func (h *AdminHandler) GetStats(c *gin.Context) {
 	// For now, return basic stats
 	// In the future, you could implement more detailed analytics

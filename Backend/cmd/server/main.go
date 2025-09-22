@@ -16,9 +16,56 @@ import (
 	"filevault-backend/internal/middleware"
 	"filevault-backend/internal/services"
 	"filevault-backend/internal/storage"
+	_ "filevault-backend/docs" // Import generated docs
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
+
+// @title FileVault API
+// @version 1.0
+// @description A secure file storage and sharing service with user authentication and admin management
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name FileVault Support
+// @contact.email support@filevault.com
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:8080
+// @BasePath /api/v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
+
+// healthCheck godoc
+// @Summary Health check endpoint
+// @Description Returns the health status of the FileVault service
+// @Tags health
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Health status"
+// @Router /health [get]
+func healthCheck(c *gin.Context) {
+	healthStatus := gin.H{
+		"status":     "healthy",
+		"timestamp":  time.Now().UTC(),
+		"database":   "connected",
+		"storage":    "connected",
+		"rate_limit": "enabled",
+	}
+
+	cfg, _ := config.Load()
+	if !cfg.RateLimitEnabled {
+		healthStatus["rate_limit"] = "disabled"
+	}
+
+	c.JSON(http.StatusOK, healthStatus)
+}
 
 func main() {
 	cfg, err := config.Load()
@@ -66,22 +113,11 @@ func main() {
 	router.Use(middleware.CORS())
 	router.Use(gin.Recovery())
 
+	// Swagger documentation
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
 	// Health check
-	router.GET("/health", func(c *gin.Context) {
-		healthStatus := gin.H{
-			"status":     "healthy",
-			"timestamp":  time.Now().UTC(),
-			"database":   "connected",
-			"storage":    "connected",
-			"rate_limit": "enabled",
-		}
-
-		if !cfg.RateLimitEnabled {
-			healthStatus["rate_limit"] = "disabled"
-		}
-
-		c.JSON(http.StatusOK, healthStatus)
-	})
+	router.GET("/health", healthCheck)
 
 	// Share routes (clean URLs for sharing - at root level)
 	router.GET("/share/:id", fileHandler.ShareFileDownload)

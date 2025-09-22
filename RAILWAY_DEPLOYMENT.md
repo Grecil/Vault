@@ -81,10 +81,28 @@ Railway Services:
 
 After all services are running:
 
-1. Go to your MinIO service URL (from Railway dashboard)
-2. Login with your MINIO_ROOT_USER and MINIO_ROOT_PASSWORD
-3. Create a bucket named `files`
-4. Set bucket policy to public read for tagged objects
+1. **Install MinIO Client (mc):**
+   - **Windows:** Download from https://dl.min.io/client/mc/release/windows-amd64/mc.exe
+   - **macOS:** `brew install minio/stable/mc`
+   - **Linux:** `wget https://dl.min.io/client/mc/release/linux-amd64/mc && chmod +x mc`
+
+2. **Set up MinIO alias and bucket:**
+   ```bash
+   # Replace YOUR_MINIO_URL with your Railway MinIO service URL
+   mc alias set myminio YOUR_MINIO_URL MINIO_ROOT_USER MINIO_ROOT_PASSWORD
+   
+   # Create bucket (if not exists)
+   mc mb myminio/files --ignore-existing
+   
+   # Apply bucket policy for public tagged objects
+   mc anonymous set-json bucket-policy.json myminio/files
+   ```
+
+3. **Alternative: Web Console Setup:**
+   - Go to your MinIO service URL (from Railway dashboard)
+   - Login with your MINIO_ROOT_USER and MINIO_ROOT_PASSWORD
+   - Create a bucket named `files`
+   - Manually set bucket policy to public read for tagged objects
 
 ## Environment Variables Reference
 
@@ -139,6 +157,7 @@ MINIO_ROOT_PASSWORD=your_secure_password_123
 **File Upload Errors:**
 - Ensure MinIO bucket `files` exists
 - Verify MinIO is accessible from backend service
+- Check bucket policy is applied: `mc anonymous set-json bucket-policy.json myminio/files`
 
 ### Debug Commands
 

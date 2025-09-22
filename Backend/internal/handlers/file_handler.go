@@ -25,7 +25,20 @@ func NewFileHandler(fileService *services.FileService, userService *services.Use
 	}
 }
 
-// GenerateUploadURL generates presigned URL for file upload
+// GenerateUploadURL godoc
+// @Summary Generate upload URL
+// @Description Generates a presigned URL for file upload
+// @Tags files
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body object{filename=string,size=int64,mime_type=string,file_hash=string} true "Upload request"
+// @Success 200 {object} map[string]interface{} "Upload URL and metadata"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 402 {object} map[string]interface{} "Storage quota exceeded"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /files/upload-url [post]
 func (h *FileHandler) GenerateUploadURL(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
@@ -67,7 +80,19 @@ func (h *FileHandler) GenerateUploadURL(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// CompleteUpload finalizes file upload
+// CompleteUpload godoc
+// @Summary Complete file upload
+// @Description Finalizes file upload after successful upload to storage
+// @Tags files
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body object{object_key=string,filename=string,mime_type=string,file_hash=string} true "Complete upload request"
+// @Success 200 {object} map[string]interface{} "Upload completion confirmation"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /files/complete [post]
 func (h *FileHandler) CompleteUpload(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
@@ -99,7 +124,19 @@ func (h *FileHandler) CompleteUpload(c *gin.Context) {
 	})
 }
 
-// ListFiles returns user's files
+// ListFiles godoc
+// @Summary List user files
+// @Description Returns a paginated list of user's files
+// @Tags files
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Items per page" default(20) maximum(100)
+// @Success 200 {object} map[string]interface{} "List of files with pagination"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /files [get]
 func (h *FileHandler) ListFiles(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
@@ -150,7 +187,19 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 	})
 }
 
-// DownloadFile generates download URL for user's file
+// DownloadFile godoc
+// @Summary Download file
+// @Description Generates a download URL for user's file
+// @Tags files
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "File ID"
+// @Success 200 {object} map[string]interface{} "Download URL"
+// @Failure 400 {object} map[string]interface{} "Invalid file ID"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 404 {object} map[string]interface{} "File not found"
+// @Router /files/{id}/download [get]
 func (h *FileHandler) DownloadFile(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
@@ -175,7 +224,20 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 	})
 }
 
-// DeleteFile deletes user's file
+// DeleteFile godoc
+// @Summary Delete file
+// @Description Deletes a user's file
+// @Tags files
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "File ID"
+// @Success 200 {object} map[string]interface{} "File deleted successfully"
+// @Failure 400 {object} map[string]interface{} "Invalid file ID"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 404 {object} map[string]interface{} "File not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /files/{id} [delete]
 func (h *FileHandler) DeleteFile(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
@@ -203,7 +265,20 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 	})
 }
 
-// TogglePublic toggles file public status and manages share links
+// TogglePublic godoc
+// @Summary Toggle file public status
+// @Description Toggles file public status and manages share links
+// @Tags files
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "File ID"
+// @Success 200 {object} map[string]interface{} "File public status updated"
+// @Failure 400 {object} map[string]interface{} "Invalid file ID"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 404 {object} map[string]interface{} "File not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /files/{id}/public [patch]
 func (h *FileHandler) TogglePublic(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {
@@ -358,7 +433,17 @@ func (h *FileHandler) BatchCompleteUpload(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// GetPublicFile returns public file info
+// GetPublicFile godoc
+// @Summary Get public file info
+// @Description Returns public file information
+// @Tags public
+// @Accept json
+// @Produce json
+// @Param id path string true "File ID"
+// @Success 200 {object} map[string]interface{} "Public file information"
+// @Failure 400 {object} map[string]interface{} "Invalid file ID"
+// @Failure 404 {object} map[string]interface{} "Public file not found"
+// @Router /public/files/{id} [get]
 func (h *FileHandler) GetPublicFile(c *gin.Context) {
 	fileID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -375,7 +460,17 @@ func (h *FileHandler) GetPublicFile(c *gin.Context) {
 	c.JSON(http.StatusOK, fileInfo)
 }
 
-// DownloadPublicFile generates download URL for public file
+// DownloadPublicFile godoc
+// @Summary Download public file
+// @Description Generates download URL for public file
+// @Tags public
+// @Accept json
+// @Produce json
+// @Param id path string true "File ID"
+// @Success 200 {object} map[string]interface{} "Download URL"
+// @Failure 400 {object} map[string]interface{} "Invalid file ID"
+// @Failure 404 {object} map[string]interface{} "Public file not found"
+// @Router /public/files/{id}/download [get]
 func (h *FileHandler) DownloadPublicFile(c *gin.Context) {
 	fileID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -394,7 +489,15 @@ func (h *FileHandler) DownloadPublicFile(c *gin.Context) {
 	})
 }
 
-// ShareFileDownload handles file downloads via share links with tracking
+// ShareFileDownload godoc
+// @Summary Download file via share link
+// @Description Handles file downloads via share links with tracking
+// @Tags sharing
+// @Param id path string true "Share ID"
+// @Success 302 "Redirect to file download"
+// @Failure 400 {object} map[string]interface{} "Invalid share ID"
+// @Failure 404 {object} map[string]interface{} "Share link not found"
+// @Router /share/{id} [get]
 func (h *FileHandler) ShareFileDownload(c *gin.Context) {
 	shareID := c.Param("id")
 	if shareID == "" {
@@ -416,7 +519,19 @@ func (h *FileHandler) ShareFileDownload(c *gin.Context) {
 	c.Redirect(http.StatusFound, downloadURL)
 }
 
-// GetShareLink returns the share link for a public file without toggling visibility
+// GetShareLink godoc
+// @Summary Get share link
+// @Description Returns the share link for a public file without toggling visibility
+// @Tags files
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "File ID"
+// @Success 200 {object} map[string]interface{} "Share link"
+// @Failure 400 {object} map[string]interface{} "Invalid file ID or file not public"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /files/{id}/share-link [get]
 func (h *FileHandler) GetShareLink(c *gin.Context) {
 	user := middleware.GetUserFromContext(c)
 	if user == nil {

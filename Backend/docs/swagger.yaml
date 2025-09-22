@@ -1,0 +1,750 @@
+basePath: /api/v1
+host: localhost:8080
+info:
+  contact:
+    email: support@filevault.com
+    name: FileVault Support
+  description: A secure file storage and sharing service with user authentication
+    and admin management
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: FileVault API
+  version: "1.0"
+paths:
+  /admin/stats:
+    get:
+      consumes:
+      - application/json
+      description: Returns system-wide statistics
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: System statistics
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden - Admin access required
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get system statistics (Admin only)
+      tags:
+      - admin
+  /admin/users:
+    get:
+      consumes:
+      - application/json
+      description: Returns a paginated list of all users
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Items per page
+        in: query
+        maximum: 100
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of users with pagination
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden - Admin access required
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List all users (Admin only)
+      tags:
+      - admin
+  /admin/users/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes a user from the system
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User deleted successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden - Admin access required
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: User not found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete user (Admin only)
+      tags:
+      - admin
+  /admin/users/{id}/quota:
+    patch:
+      consumes:
+      - application/json
+      description: Updates a user's storage quota in MB
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Quota update request
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            quota_mb:
+              format: int64
+              type: integer
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User storage quota updated successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden - Admin access required
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update user storage quota (Admin only)
+      tags:
+      - admin
+  /admin/users/{id}/role:
+    patch:
+      consumes:
+      - application/json
+      description: Updates a user's role (user or admin)
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Role update request
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            role:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User role updated successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden - Admin access required
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update user role (Admin only)
+      tags:
+      - admin
+  /files:
+    get:
+      consumes:
+      - application/json
+      description: Returns a paginated list of user's files
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        maximum: 100
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of files with pagination
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List user files
+      tags:
+      - files
+  /files/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes a user's file
+      parameters:
+      - description: File ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: File deleted successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid file ID
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: File not found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete file
+      tags:
+      - files
+  /files/{id}/download:
+    get:
+      consumes:
+      - application/json
+      description: Generates a download URL for user's file
+      parameters:
+      - description: File ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Download URL
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid file ID
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: File not found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Download file
+      tags:
+      - files
+  /files/{id}/public:
+    patch:
+      consumes:
+      - application/json
+      description: Toggles file public status and manages share links
+      parameters:
+      - description: File ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: File public status updated
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid file ID
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: File not found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Toggle file public status
+      tags:
+      - files
+  /files/{id}/share-link:
+    get:
+      consumes:
+      - application/json
+      description: Returns the share link for a public file without toggling visibility
+      parameters:
+      - description: File ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Share link
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid file ID or file not public
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get share link
+      tags:
+      - files
+  /files/complete:
+    post:
+      consumes:
+      - application/json
+      description: Finalizes file upload after successful upload to storage
+      parameters:
+      - description: Complete upload request
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            file_hash:
+              type: string
+            filename:
+              type: string
+            mime_type:
+              type: string
+            object_key:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Upload completion confirmation
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Complete file upload
+      tags:
+      - files
+  /files/upload-url:
+    post:
+      consumes:
+      - application/json
+      description: Generates a presigned URL for file upload
+      parameters:
+      - description: Upload request
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            file_hash:
+              type: string
+            filename:
+              type: string
+            mime_type:
+              type: string
+            size:
+              format: int64
+              type: integer
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Upload URL and metadata
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "402":
+          description: Storage quota exceeded
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate upload URL
+      tags:
+      - files
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Returns the health status of the FileVault service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Health status
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Health check endpoint
+      tags:
+      - health
+  /public/files/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Returns public file information
+      parameters:
+      - description: File ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Public file information
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid file ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Public file not found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get public file info
+      tags:
+      - public
+  /public/files/{id}/download:
+    get:
+      consumes:
+      - application/json
+      description: Generates download URL for public file
+      parameters:
+      - description: File ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Download URL
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid file ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Public file not found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Download public file
+      tags:
+      - public
+  /share/{id}:
+    get:
+      description: Handles file downloads via share links with tracking
+      parameters:
+      - description: Share ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "302":
+          description: Redirect to file download
+        "400":
+          description: Invalid share ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Share link not found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Download file via share link
+      tags:
+      - sharing
+  /user/profile:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current authenticated user's profile information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User profile
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get user profile
+      tags:
+      - users
+  /user/storage:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current user's storage usage and quota information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Storage information
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get storage information
+      tags:
+      - users
+  /user/storage/statistics:
+    get:
+      consumes:
+      - application/json
+      description: Returns comprehensive storage statistics for the current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Storage statistics
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get storage statistics
+      tags:
+      - users
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

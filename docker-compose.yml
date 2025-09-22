@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: filevault
+      POSTGRES_USER: filevault_user
+      POSTGRES_PASSWORD: filevault_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U filevault_user -d filevault"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: password123
+    ports:
+      - "9000:9000"  # MinIO API
+      - "9001:9001"  # MinIO Console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Backend API
+  backend:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile.railway
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: filevault_user
+      DB_PASSWORD: filevault_password
+      DB_NAME: filevault
+      DB_SSL_MODE: disable
+      SERVER_PORT: 8080
+      GIN_MODE: debug
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: password123
+      MINIO_BUCKET: files
+      MINIO_USE_SSL: false
+      RATE_LIMIT_ENABLED: true
+      RATE_LIMIT_PER_SECOND: 10.0
+      RATE_LIMIT_BURST_SIZE: 20
+      DEFAULT_STORAGE_QUOTA_MB: 1000
+      MAX_STORAGE_QUOTA_MB: 10240
+      # Add your Clerk keys here
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-your_clerk_secret_key_here}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./Backend/.env:/app/.env:ro
+
+  # Frontend
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile.railway
+    environment:
+      VITE_API_URL: http://localhost:8080/api/v1
+      VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-your_clerk_publishable_key_here}
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  # MinIO Bucket Setup (runs once to create bucket)
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  minio_data:
